@@ -268,7 +268,7 @@ router.get('/addons', (_req: Request, res: Response) => {
 });
 
 router.put('/addons/:id', (req: Request, res: Response) => {
-  const result = svc.updateAddon(req.params.id, req.body || {});
+  const result = svc.updateAddon(req.params.id, req.body);
   if ('error' in result) return res.status(result.status!).json({ error: result.error });
   const authReq = req as AuthRequest;
   writeAudit({
@@ -300,9 +300,12 @@ router.post('/rotate-jwt-secret', (req: Request, res: Response) => {
   if (result.error) return res.status(result.status!).json({ error: result.error });
   const authReq = req as AuthRequest;
   writeAudit({
-    userId: authReq.user?.id ?? null,
+    user_id: authReq.user?.id ?? null,
+    username: authReq.user?.username ?? 'unknown',
     action: 'admin.rotate_jwt_secret',
-    resource: 'system',
+    target_type: 'system',
+    target_id: null,
+    details: null,
     ip: getClientIp(req),
   });
   res.json({ success: true });

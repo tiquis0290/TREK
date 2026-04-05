@@ -136,7 +136,12 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
               {r.reservation_time && (
                 <div style={{ flex: 1, padding: '5px 10px', textAlign: 'center', borderRight: '1px solid var(--border-faint)' }}>
                   <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('reservations.date')}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginTop: 1 }}>{fmtDate(r.reservation_time)}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginTop: 1 }}>
+                    {fmtDate(r.reservation_time)}
+                    {r.reservation_end_time?.includes('T') && r.reservation_end_time.split('T')[0] !== r.reservation_time.split('T')[0] && (
+                      <> – {fmtDate(r.reservation_end_time)}</>
+                    )}
+                  </div>
                 </div>
               )}
               {r.reservation_time?.includes('T') && (
@@ -179,8 +184,8 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
             if (meta.train_number) cells.push({ label: t('reservations.meta.trainNumber'), value: meta.train_number })
             if (meta.platform) cells.push({ label: t('reservations.meta.platform'), value: meta.platform })
             if (meta.seat) cells.push({ label: t('reservations.meta.seat'), value: meta.seat })
-            if (meta.check_in_time) cells.push({ label: t('reservations.meta.checkIn'), value: meta.check_in_time })
-            if (meta.check_out_time) cells.push({ label: t('reservations.meta.checkOut'), value: meta.check_out_time })
+            if (meta.check_in_time) cells.push({ label: t('reservations.meta.checkIn'), value: fmtTime('2000-01-01T' + meta.check_in_time) })
+            if (meta.check_out_time) cells.push({ label: t('reservations.meta.checkOut'), value: fmtTime('2000-01-01T' + meta.check_out_time) })
             if (cells.length === 0) return null
             return (
               <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-secondary)', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>

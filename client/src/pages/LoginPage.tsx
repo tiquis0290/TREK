@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
@@ -33,6 +33,16 @@ export default function LoginPage(): React.ReactElement {
   const { login, register, demoLogin, completeMfaLogin, loadUser } = useAuthStore()
   const { setLanguageLocal } = useSettingsStore()
   const navigate = useNavigate()
+
+  const redirectTarget = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    const redirect = params.get('redirect')
+    // Only allow relative paths starting with / to prevent open redirect attacks
+    if (redirect && redirect.startsWith('/') && !redirect.startsWith('//') && !redirect.startsWith('/\\')) {
+      return redirect
+    }
+    return '/dashboard'
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -99,7 +109,7 @@ export default function LoginPage(): React.ReactElement {
     try {
       await demoLogin()
       setShowTakeoff(true)
-      setTimeout(() => navigate('/dashboard'), 2600)
+      setTimeout(() => navigate(redirectTarget), 2600)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('login.demoFailed'))
     } finally {
@@ -128,7 +138,7 @@ export default function LoginPage(): React.ReactElement {
         await authApi.changePassword({ current_password: savedLoginPassword, new_password: newPassword })
         await loadUser({ silent: true })
         setShowTakeoff(true)
-        setTimeout(() => navigate('/dashboard'), 2600)
+        setTimeout(() => navigate(redirectTarget), 2600)
         return
       }
       if (mode === 'login' && mfaStep) {
@@ -145,7 +155,7 @@ export default function LoginPage(): React.ReactElement {
           return
         }
         setShowTakeoff(true)
-        setTimeout(() => navigate('/dashboard'), 2600)
+        setTimeout(() => navigate(redirectTarget), 2600)
         return
       }
       if (mode === 'register') {
@@ -169,7 +179,7 @@ export default function LoginPage(): React.ReactElement {
         }
       }
       setShowTakeoff(true)
-      setTimeout(() => navigate('/dashboard'), 2600)
+      setTimeout(() => navigate(redirectTarget), 2600)
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, t('login.error')))
       setIsLoading(false)

@@ -43,7 +43,8 @@ function ProtectedRoute({ children, adminRequired = false }: ProtectedRouteProps
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    const redirectParam = encodeURIComponent(location.pathname + location.search)
+    return <Navigate to={`/login?redirect=${redirectParam}`} replace />
   }
 
   if (

@@ -183,10 +183,14 @@ export async function pipeAsset(url: string, response: Response): Promise<void> 
             response.end();
         }
         else {
-            pipeline(Readable.fromWeb(resp.body), response);
+            await pipeline(Readable.fromWeb(resp.body), response);
         }
     }
     catch (error) {
+        if (response.headersSent) {
+            response.end();
+            return;
+        }
         response.status(500).json({ error: 'Failed to fetch asset' });
         response.end();
     }

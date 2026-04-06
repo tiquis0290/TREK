@@ -241,7 +241,7 @@ export async function getStats(userId: number) {
 
   const countries = [...countrySet.values()].map(c => {
     const countryTrips = trips.filter(t => c.tripIds.has(t.id));
-    const dates = countryTrips.map(t => t.start_date).filter(Boolean).sort();
+    const dates = countryTrips.map(t => t.start_date).filter(Boolean).sort((a, b) => a.localeCompare(b));
     return {
       code: c.code,
       placeCount: c.places.length,
@@ -272,7 +272,7 @@ export async function getStats(userId: number) {
     }
   }
 
-  const mostVisited = countries.length > 0 ? countries.reduce((a, b) => a.placeCount > b.placeCount ? a : b) : null;
+  const mostVisited = countries.length > 0 ? countries.reduce((a, b) => a.placeCount > b.placeCount ? a : b, countries[0]) : null;
 
   const continents: Record<string, number> = {};
   countries.forEach(c => {

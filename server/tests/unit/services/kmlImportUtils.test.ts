@@ -8,7 +8,7 @@ import {
   resolveCategoryIdForFolder,
   sanitizeKmlDescription,
   stripXmlNamespaces,
-} from '../../../src/services/placeImport/kmlImportUtils';
+} from '../../../src/services/kmlImport';
 
 describe('kmlImportUtils', () => {
   it('strips KML namespaces and prefixes', () => {

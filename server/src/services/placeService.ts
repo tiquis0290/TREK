@@ -12,7 +12,7 @@ import {
   resolveCategoryIdForFolder,
   stripXmlNamespaces,
   type KmlImportSummary,
-} from './placeImport/kmlImportUtils';
+} from './kmlImport';
 
 interface PlaceWithCategory extends Place {
   category_name: string | null;

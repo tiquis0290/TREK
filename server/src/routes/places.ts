@@ -19,7 +19,7 @@ import {
   searchPlaceImage,
 } from '../services/placeService';
 
-const gpxUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const uploadMulter = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const router = express.Router({ mergeParams: true });
 
@@ -54,7 +54,7 @@ router.post('/', authenticate, requireTripAccess, validateStringLengths({ name: 
 });
 
 // Import places from GPX file with full track geometry (must be before /:id)
-router.post('/import/gpx', authenticate, requireTripAccess, gpxUpload.single('file'), (req: Request, res: Response) => {
+router.post('/import/gpx', authenticate, requireTripAccess, uploadMulter.single('file'), (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   if (!checkPermission('place_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
     return res.status(403).json({ error: 'No permission' });
@@ -74,7 +74,7 @@ router.post('/import/gpx', authenticate, requireTripAccess, gpxUpload.single('fi
   }
 });
 
-router.post('/import/kml', authenticate, requireTripAccess, gpxUpload.single('file'), (req: Request, res: Response) => {
+router.post('/import/kml', authenticate, requireTripAccess, uploadMulter.single('file'), (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   if (!checkPermission('place_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id)) {
     return res.status(403).json({ error: 'No permission' });
@@ -100,7 +100,7 @@ router.post('/import/kml', authenticate, requireTripAccess, gpxUpload.single('fi
   }
 });
 
-router.post('/import/kmz', authenticate, requireTripAccess, gpxUpload.single('file'), async (req: Request, res: Response) => {
+router.post('/import/kmz', authenticate, requireTripAccess, uploadMulter.single('file'), async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   if (!checkPermission('place_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id)) {
     return res.status(403).json({ error: 'No permission' });

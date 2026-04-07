@@ -65,7 +65,7 @@ export function AlbumPickerModal({
         return () => {
             active = false
         }
-    }, [selectedProvider, buildProviderUrl])
+    }, [selectedProvider])
 
     const handleLinkAlbum = async (albumId: string, albumName: string) => {
         if (!selectedProvider) {

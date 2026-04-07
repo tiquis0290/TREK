@@ -86,7 +86,7 @@ export function PhotoPickerModal({
     return () => {
       active = false
     }
-  }, [selectedProvider, pickerDateFilter, startDate, endDate, tripId, toast, t])
+  }, [selectedProvider, pickerDateFilter, startDate, endDate, tripId])
 
   const title = availableProviders.length > 1
     ? t('memories.selectPhotosMultiple')

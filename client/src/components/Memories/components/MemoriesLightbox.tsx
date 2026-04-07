@@ -22,6 +22,7 @@ export function MemoriesLightbox({
   const [lightboxInfo, setLightboxInfo] = useState<any>(null)
   const [lightboxInfoLoading, setLightboxInfoLoading] = useState(false)
   const [lightboxOriginalSrc, setLightboxOriginalSrc] = useState('')
+  const [lightboxImageLoading, setLightboxImageLoading] = useState(false)
   const [showMobileInfo, setShowMobileInfo] = useState(false)
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
   const [currentPhoto, setCurrentPhoto] = useState<TripPhoto | null>(initialPhoto)
@@ -59,6 +60,8 @@ export function MemoriesLightbox({
     setShowMobileInfo(false)
     setLightboxInfo(null)
     setLightboxInfoLoading(true)
+    setLightboxOriginalSrc('')
+    setLightboxImageLoading(true)
 
     fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'original'))
       .then(blobUrl => {
@@ -68,9 +71,13 @@ export function MemoriesLightbox({
         }
         revoked = blobUrl
         setLightboxOriginalSrc(blobUrl)
+        setLightboxImageLoading(false)
       })
       .catch(() => {
-        if (active) setLightboxOriginalSrc('')
+        if (active) {
+          setLightboxOriginalSrc('')
+          setLightboxImageLoading(false)
+        }
       })
 
     apiClient.get(buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'info'))
@@ -260,7 +267,7 @@ export function MemoriesLightbox({
         </div>
       )}
 
-      {hasPrev && (
+      {isMobile && hasPrev && (
         <button
           onClick={e => {
             e.stopPropagation()
@@ -288,7 +295,7 @@ export function MemoriesLightbox({
         </button>
       )}
 
-      {hasNext && (
+      {isMobile && hasNext && (
         <button
           onClick={e => {
             e.stopPropagation()
@@ -346,22 +353,94 @@ export function MemoriesLightbox({
         onClick={e => {
           if (e.target === e.currentTarget) closeLightbox()
         }}
-        style={{ display: 'flex', gap: 16, alignItems: 'flex-start', justifyContent: 'center', padding: 20, width: '100%', height: '100%' }}
+        style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'center', padding: 20, width: '100%', height: '100%' }}
       >
-        <img
-          src={lightboxOriginalSrc}
-          alt=""
+        {!isMobile && (hasPrev ? (
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              goPrev()
+            }}
+            style={{
+              zIndex: 10,
+              background: 'rgba(0,0,0,0.5)',
+              border: 'none',
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'rgba(255,255,255,0.8)',
+              flexShrink: 0,
+            }}
+          >
+            <ChevronLeft size={22} />
+          </button>
+        ) : (
+          <div aria-hidden style={{ width: 40, height: 40, flexShrink: 0 }} />
+        ))}
+
+        <div
           onClick={e => e.stopPropagation()}
           style={{
-            maxWidth: !isMobile && lightboxInfo ? 'calc(100% - 280px)' : '100%',
-            maxHeight: '100%',
-            objectFit: 'contain',
-            borderRadius: 10,
-            cursor: 'default',
+            flex: 1,
+            minWidth: 0,
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
-        />
+        >
+          {lightboxImageLoading && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: 'white' }} />
+            </div>
+          )}
+          {!lightboxImageLoading && lightboxOriginalSrc && (
+            <img
+              src={lightboxOriginalSrc}
+              alt=""
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                borderRadius: 10,
+                cursor: 'default',
+              }}
+            />
+          )}
+        </div>
 
-        {!isMobile && lightboxInfo && (
+        {!isMobile && (hasNext ? (
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              goNext()
+            }}
+            style={{
+              zIndex: 10,
+              background: 'rgba(0,0,0,0.5)',
+              border: 'none',
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'rgba(255,255,255,0.8)',
+              flexShrink: 0,
+            }}
+          >
+            <ChevronRight size={22} />
+          </button>
+        ) : (
+          <div aria-hidden style={{ width: 40, height: 40, flexShrink: 0 }} />
+        ))}
+
+        {!isMobile && (
           <div
             style={{
               width: 240,
@@ -380,15 +459,15 @@ export function MemoriesLightbox({
               overflowY: 'auto',
             }}
           >
+            {!isMobile && lightboxInfoLoading && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: 'white' }} />
+              </div>
+            )}
             {exifContent}
           </div>
         )}
 
-        {!isMobile && lightboxInfoLoading && (
-          <div style={{ width: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: 'white' }} />
-          </div>
-        )}
       </div>
 
       {isMobile && showMobileInfo && lightboxInfo && (

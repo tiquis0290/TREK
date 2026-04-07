@@ -190,17 +190,24 @@ export function PhotoPickerModal({
   const executeAddPhotos = async () => {
     setShowConfirmShare(false)
     try {
-      const groupedByProvider = new Map<string, string[]>()
+      const assetsByKey = new Map(pickerPhotos.map(asset => [makePickerKey(asset.provider, asset.id), asset]))
+      const groupedByProvider = new Map<string, Asset[]>()
       for (const key of selectedIds) {
-        const [provider, assetId] = key.split('::')
-        if (!provider || !assetId) continue
-        const list = groupedByProvider.get(provider) || []
-        list.push(assetId)
-        groupedByProvider.set(provider, list)
+        const asset = assetsByKey.get(key)
+        if (!asset) continue
+        const list = groupedByProvider.get(asset.provider) || []
+        list.push(asset)
+        groupedByProvider.set(asset.provider, list)
       }
 
+      const selections = [...groupedByProvider.entries()].map(([provider, assets]) => ({
+        provider,
+        asset_ids: assets.map(asset => asset.id),
+        assets: assets,
+      }))
+
       await apiClient.post(buildUnifiedUrl('photos'), {
-        selections: [...groupedByProvider.entries()].map(([provider, asset_ids]) => ({ provider, asset_ids })),
+        selections,
         shared: true,
       })
       setSelectedIds(new Set())

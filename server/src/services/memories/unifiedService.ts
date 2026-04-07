@@ -45,7 +45,7 @@ export function listTripPhotos(tripId: string, userId: number): ServiceResult<an
     }
 
     const photos = db.prepare(`
-      SELECT tp.asset_id, tp.provider, tp.user_id, tp.shared, tp.added_at,
+      SELECT tp.*,
              u.username, u.avatar
       FROM trip_photos tp
       JOIN users u ON tp.user_id = u.id
@@ -102,15 +102,15 @@ export function listTripAlbumLinks(tripId: string, userId: number): ServiceResul
 //-----------------------------------------------
 // managing photos in trip
 
-function _addTripPhoto(tripId: string, userId: number, provider: string, assetId: string, takenAt: string | null, shared: boolean, albumLinkId?: string): ServiceResult<boolean> {
+function _addTripPhoto(tripId: string, userId: number, provider: string, assetId: string, takenAt: string | null, city: string | null, shared: boolean, albumLinkId?: string): ServiceResult<boolean> {
   const providerResult = _validProvider(provider);
   if (!providerResult.success) {
     return providerResult as ServiceResult<boolean>;
   }
   try {
     const result = db.prepare(
-      'INSERT OR IGNORE INTO trip_photos (trip_id, user_id, asset_id, provider, taken_at, shared, album_link_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(tripId, userId, assetId, provider, takenAt, shared ? 1 : 0, albumLinkId || null);
+      'INSERT OR IGNORE INTO trip_photos (trip_id, user_id, asset_id, provider, taken_at, city, shared, album_link_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(tripId, userId, assetId, provider, takenAt, city, shared ? 1 : 0, albumLinkId || null);
     return success(result.changes > 0);
   }
   catch (error) {
@@ -141,10 +141,27 @@ export async function addTripPhotos(
     if (!providerResult.success) {
       return providerResult as ServiceResult<{ added: number; shared: boolean }>;
     }
-    for (const raw of selection.asset_ids) {
+    const assetMetaById = new Map(
+      (selection.assets || []).map(asset => [String(asset.id || '').trim(), asset])
+    );
+    const assetIds = selection.asset_ids.length > 0
+      ? selection.asset_ids
+      : (selection.assets || []).map(asset => asset.id);
+
+    for (const raw of assetIds) {
       const assetId = String(raw || '').trim();
       if (!assetId) continue;
-      const result = _addTripPhoto(tripId, userId, selection.provider, assetId, null, shared, albumLinkId);
+      const assetMeta = assetMetaById.get(assetId);
+      const result = _addTripPhoto(
+        tripId,
+        userId,
+        selection.provider,
+        assetId,
+        assetMeta?.takenAt ?? null,
+        assetMeta?.city ?? null,
+        shared,
+        albumLinkId,
+      );
       if (!result.success) {
         return result as ServiceResult<{ added: number; shared: boolean }>;
       }

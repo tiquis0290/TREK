@@ -1,6 +1,6 @@
 export interface PhotoMetadata {
   provider: string
-  takenAt?: string | null
+  taken_at?: string | null
   city?: string | null
   country?: string | null
 }

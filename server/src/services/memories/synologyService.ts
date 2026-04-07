@@ -23,6 +23,37 @@ import {
 const SYNOLOGY_PROVIDER = 'synologyphotos';
 const SYNOLOGY_ENDPOINT_PATH = '/photo/webapi/entry.cgi';
 
+const SYNOLOGY_ADDITIONAL_FIELDS = ['thumbnail', 'address'];
+
+const ERROR_MESSAGES: Record<number, string> = {
+  101: 'Missing API, method, or version parameter.',
+  102: 'Requested API does not exist.',
+  103: 'Requested method does not exist.',
+  104: 'Requested API version is not supported.',
+  105: 'Insufficient privilege.',
+  106: 'Connection timeout.',
+  107: 'Multiple logins blocked from this IP.',
+  117: 'Manager privilege required.',
+  119: 'Session is invalid or expired.',
+  400: 'Authentication failed.',
+  401: 'Session expired or account disabled.',
+  402: 'No permission to use this account.',
+  403: 'Two-factor authentication is required.',
+  404: 'Two-factor authentication failed.',
+  406: 'Two-factor authentication is enforced for this account.',
+  407: 'Maximum attempts reached.',
+  408: 'Password expired.',
+  409: 'Remote password expired.',
+  410: 'Password must be changed before login.',
+  412: 'Guest account cannot log in.',
+  413: 'OTP system files are corrupted.',
+  414: 'Unable to log in.',
+  416: 'Unable to log in.',
+  417: 'OTP system is full.',
+  498: 'System is upgrading.',
+  499: 'System is not ready.',
+};
+
 interface SynologyUserRecord {
     synology_url?: string | null;
     synology_username?: string | null;
@@ -368,7 +399,7 @@ export async function syncSynologyAlbumLink(userId: number, tripId: string, link
             album_id: Number(response.data),
             offset,
             limit: pageSize,
-            additional: ['thumbnail'],
+            additional: SYNOLOGY_ADDITIONAL_FIELDS,
         });
 
         if (!result.success) return result as ServiceResult<SyncAlbumResult>;
@@ -382,6 +413,12 @@ export async function syncSynologyAlbumLink(userId: number, tripId: string, link
     const selection: Selection = {
         provider: SYNOLOGY_PROVIDER,
         asset_ids: allItems.map(item => String(item.additional?.thumbnail?.cache_key || '')).filter(id => id),
+        assets: allItems.map(item => ({
+            id: String(item.additional?.thumbnail?.cache_key || ''),
+            takenAt: item.time ? new Date(item.time * 1000).toISOString() : null,
+            city: item.additional?.address?.city || null,
+            country: item.additional?.address?.country || null,
+        })),
     };
 
 
@@ -401,7 +438,7 @@ export async function searchSynologyPhotos(userId: number, from?: string, to?: s
         offset,
         limit,
         keyword: '.',
-        additional: ['thumbnail', 'address'],
+        additional: SYNOLOGY_ADDITIONAL_FIELDS,
     };
 
     if (from || to) {

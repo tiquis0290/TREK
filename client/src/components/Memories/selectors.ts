@@ -30,8 +30,8 @@ export function deriveVisibleMemories({
   const allVisible = allVisibleRaw
     .filter(p => !locationFilter || p.city === locationFilter)
     .sort((a, b) => {
-      const da = new Date(a.added_at || 0).getTime()
-      const db = new Date(b.added_at || 0).getTime()
+      const da = new Date(a.taken_at || 0).getTime()
+      const db = new Date(b.taken_at || 0).getTime()
       return sortAsc ? da - db : db - da
     })
 

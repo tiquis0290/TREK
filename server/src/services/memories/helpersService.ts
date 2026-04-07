@@ -42,6 +42,12 @@ export function handleServiceResult<T>(res: Response, result: ServiceResult<T>):
 export type Selection = {
     provider: string;
     asset_ids: string[];
+    assets?: Array<{
+        id: string;
+        takenAt?: string | null;
+        city?: string | null;
+        country?: string | null;
+    }>;
 };
 
 export type StatusResult = {

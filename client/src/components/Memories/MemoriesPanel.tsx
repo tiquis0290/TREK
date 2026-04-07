@@ -55,6 +55,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   }
 
   const openAlbumPicker = async () => {
+    clearImageQueue();
     setShowAlbumPicker(true)
   }
 
@@ -151,8 +152,8 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
   const openPicker = () => {
     clearImageQueue();
-    setShowPicker(true)
     setPickerDateFilter(!!(startDate && endDate))
+    setShowPicker(true)
   }
 
   const openLightbox = (photo: TripPhoto) => {

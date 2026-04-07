@@ -908,8 +908,8 @@ function runMigrations(db: Database.Database): void {
       }
     },
     () => {
-      db.exec(`alter table trip_photos add column taken_at datetime default null`);
-      db.exec(`alter table trip_photos add column city text default null`);
+      try {db.exec(`alter table trip_photos add column taken_at datetime default null`);} catch (err) {}
+      try {db.exec(`alter table trip_photos add column city text default null`);} catch (err) {}
     }
   ];
 

@@ -471,6 +471,7 @@ function createTables(db: Database.Database): void {
         provider TEXT NOT NULL,
         album_link_id INTEGER REFERENCES trip_album_links(id) ON DELETE SET NULL,
         UNIQUE(trip_id, user_id, asset_id)
+    );
   `);
 }
 

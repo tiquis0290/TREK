@@ -10,10 +10,10 @@ import {
 } from './helpersService';
 
 
-function _providers(): Array<{id: string; enabled: boolean}> {
-  const rows = db.prepare('SELECT id, enabled FROM photo_providers').all() as Array<{id: string; enabled: number}>;
+function _providers(): Array<{ id: string; enabled: boolean }> {
+  const rows = db.prepare('SELECT id, enabled FROM photo_providers').all() as Array<{ id: string; enabled: number }>;
   return rows.map(r => ({ id: r.id, enabled: r.enabled === 1 }));
-} 
+}
 
 function _validProvider(provider: string): ServiceResult<string> {
   const providers = _providers();
@@ -67,12 +67,12 @@ export function listTripAlbumLinks(tripId: string, userId: number): ServiceResul
     return fail('Trip not found or access denied', 404);
   }
 
-  
-    const enabledProviders = _providers().filter(p => p.enabled).map(p => p.id);
 
-    if (enabledProviders.length === 0) {
-      return fail('No photo providers enabled', 400);
-    }
+  const enabledProviders = _providers().filter(p => p.enabled).map(p => p.id);
+
+  if (enabledProviders.length === 0) {
+    return fail('No photo providers enabled', 400);
+  }
 
   try {
     const links = db.prepare(`
@@ -102,15 +102,15 @@ export function listTripAlbumLinks(tripId: string, userId: number): ServiceResul
 //-----------------------------------------------
 // managing photos in trip
 
-function _addTripPhoto(tripId: string, userId: number, provider: string, assetId: string, shared: boolean, albumLinkId?: string): ServiceResult<boolean> {
+function _addTripPhoto(tripId: string, userId: number, provider: string, assetId: string, takenAt: string | null, shared: boolean, albumLinkId?: string): ServiceResult<boolean> {
   const providerResult = _validProvider(provider);
   if (!providerResult.success) {
     return providerResult as ServiceResult<boolean>;
   }
   try {
     const result = db.prepare(
-      'INSERT OR IGNORE INTO trip_photos (trip_id, user_id, asset_id, provider, shared, album_link_id) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(tripId, userId, assetId, provider, shared ? 1 : 0, albumLinkId || null);
+      'INSERT OR IGNORE INTO trip_photos (trip_id, user_id, asset_id, provider, taken_at, shared, album_link_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(tripId, userId, assetId, provider, takenAt, shared ? 1 : 0, albumLinkId || null);
     return success(result.changes > 0);
   }
   catch (error) {
@@ -144,7 +144,7 @@ export async function addTripPhotos(
     for (const raw of selection.asset_ids) {
       const assetId = String(raw || '').trim();
       if (!assetId) continue;
-      const result = _addTripPhoto(tripId, userId, selection.provider, assetId, shared, albumLinkId);
+      const result = _addTripPhoto(tripId, userId, selection.provider, assetId, null, shared, albumLinkId);
       if (!result.success) {
         return result as ServiceResult<{ added: number; shared: boolean }>;
       }
@@ -274,7 +274,7 @@ export function removeAlbumLink(tripId: string, linkId: string, userId: number):
       db.prepare('DELETE FROM trip_album_links WHERE id = ? AND trip_id = ? AND user_id = ?')
         .run(linkId, tripId, userId);
     })();
-    
+
     return success(true);
   } catch (error) {
     return mapDbError(error, 'Failed to remove album link');
@@ -297,8 +297,8 @@ async function _notifySharedTripPhotos(
 
     const tripInfo = db.prepare('SELECT title FROM trips WHERE id = ?').get(tripId) as { title: string } | undefined;
 
-    
-    send({ event: 'photos_shared', actorId: actorUserId, scope: 'trip', targetId: Number(tripId), params: { trip: tripInfo?.title || 'Untitled', actor: actorRow?.email || 'Unknown', count: String(added), tripId: String(tripId) } }).catch(() => {});
+
+    send({ event: 'photos_shared', actorId: actorUserId, scope: 'trip', targetId: Number(tripId), params: { trip: tripInfo?.title || 'Untitled', actor: actorRow?.email || 'Unknown', count: String(added), tripId: String(tripId) } }).catch(() => { });
     return success(undefined);
   } catch {
     return fail('Failed to send notifications', 500);

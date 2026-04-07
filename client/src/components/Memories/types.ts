@@ -22,6 +22,7 @@ export interface TripPhoto extends PhotoMetadata {
 
 export interface Asset extends PhotoMetadata {
   id: string
+  takenAt?: string | null
 }
 
 export interface Album {

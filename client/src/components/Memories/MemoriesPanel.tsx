@@ -33,7 +33,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [showPicker, setShowPicker] = useState(false)
 
   // Filters & sort
-  const [sortAsc, setSortAsc] = useState(true)
+  const [sortAsc, setSortAsc] = useState(false)
   const [locationFilter, setLocationFilter] = useState('')
 
   // Album linking
@@ -83,15 +83,15 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    loadInitial()
-  }, [tripId])
-
   // WebSocket: reload photos when another user adds/removes/shares
   useEffect(() => {
     const handler = () => loadPhotos()
+    loadInitial()
     window.addEventListener('memories:updated', handler)
-    return () => window.removeEventListener('memories:updated', handler)
+    return () => { 
+      window.removeEventListener('memories:updated', handler);
+      clearImageQueue();
+    }
   }, [tripId])
 
   const loadPhotos = async () => {
@@ -129,7 +129,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       const connectedProviders = statusResults
         .filter(r => r.connected)
         .map(r => ({ id: r.provider.id, name: r.provider.name, icon: r.provider.icon, config: r.provider.config }))
-      
+
       setAvailableProviders(connectedProviders)
       setConnected(connectedProviders.length > 0)
       if (connectedProviders.length > 0 && !selectedProvider) {
@@ -150,6 +150,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [pickerDateFilter, setPickerDateFilter] = useState(true)
 
   const openPicker = () => {
+    clearImageQueue();
     setShowPicker(true)
     setPickerDateFilter(!!(startDate && endDate))
   }

@@ -364,16 +364,25 @@ export async function testSynologyConnection(synologyUrl: string, synologyUserna
 }
 
 export async function listSynologyAlbums(userId: number): Promise<ServiceResult<AlbumsList>> {
-    const result = await _requestSynologyApi<{ list: SynologyPhotoItem[] }>(userId, {
-        api: 'SYNO.Foto.Browse.Album',
-        method: 'list',
-        version: 4,
-        offset: 0,
-        limit: 100,
-    });
-    if (!result.success) return result as ServiceResult<AlbumsList>;
+    const rawAlbums = []
+    const pagesize = 1000;
+    let offset = 0;
+    while (true) {
+        const result = await _requestSynologyApi<{ list: SynologyPhotoItem[] }>(userId, {
+            api: 'SYNO.Foto.Browse.Album',
+            method: 'list',
+            version: 4,
+            offset: offset,
+            limit: pagesize,
+        });
+        if (!result.success) return result as ServiceResult<AlbumsList>;
+        if (!result.data?.list || result.data.list.length === 0) break;
+        rawAlbums.push(...result.data.list);
+        if (result.data.list.length < pagesize) break;
+        offset += pagesize;
+    }
 
-    const albums = (result.data.list || []).map((album: any) => ({
+    const albums = (rawAlbums || []).map((album: any) => ({
         id: String(album.id),
         albumName: album.name || '',
         assetCount: album.item_count || 0,
@@ -430,7 +439,8 @@ export async function syncSynologyAlbumLink(userId: number, tripId: string, link
     return success({ added: result.data.added, total: allItems.length });
 }
 
-export async function searchSynologyPhotos(userId: number, from?: string, to?: string, offset = 0, limit = 300): Promise<ServiceResult<AssetsList>> {
+export async function searchSynologyPhotos(userId: number, from?: string, to?: string, offset = 0, limit = 1000): Promise<ServiceResult<AssetsList>> {
+    limit = Math.min(limit, 1000); // enforce maximum page size to prevent abuse
     const params: ApiCallParams = {
         api: 'SYNO.Foto.Search.Search',
         method: 'list_item',

@@ -33,7 +33,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [showPicker, setShowPicker] = useState(false)
 
   // Filters & sort
-  const [sortAsc, setSortAsc] = useState(false)
+  const [sortAsc, setSortAsc] = useState(true)
   const [locationFilter, setLocationFilter] = useState('')
 
   // Album linking

@@ -87,7 +87,7 @@ router.post('/search', authenticate, async (req: Request, res: Response) => {
     const from = _parseStringBodyField(body.from);
     const to = _parseStringBodyField(body.to);
     const offset = _parseNumberBodyField(body.offset, 0);
-    const limit = _parseNumberBodyField(body.limit, 100);
+    const limit = _parseNumberBodyField(body.limit, 1000);
 
     handleServiceResult(res, await searchSynologyPhotos(
         authReq.user.id,

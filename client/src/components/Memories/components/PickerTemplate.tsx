@@ -12,6 +12,8 @@ interface PickerTemplateProps {
   primaryAction?: ReactNode
   controls?: ReactNode
   children: ReactNode
+  scrollRef?: React.RefObject<HTMLDivElement>
+  onScroll?: () => void
 }
 
 export function PickerTemplate({
@@ -24,6 +26,8 @@ export function PickerTemplate({
   primaryAction,
   controls,
   children,
+  scrollRef,
+  onScroll,
 }: PickerTemplateProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -61,7 +65,9 @@ export function PickerTemplate({
         {controls}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>{children}</div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }} ref={scrollRef} onScroll={onScroll}>
+        {children}
+      </div>
     </div>
   )
 }

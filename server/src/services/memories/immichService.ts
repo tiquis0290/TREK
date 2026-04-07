@@ -149,44 +149,53 @@ export async function browseTimeline(
 export async function searchPhotos(
   userId: number,
   from?: string,
-  to?: string
-): Promise<{ assets?: any[]; error?: string; status?: number }> {
+  to?: string,
+  offset = 0,
+  limit = 1000
+): Promise<{ assets?: any[]; hasMore?: boolean; total?: number; error?: string; status?: number }> {
   const creds = getImmichCredentials(userId);
   if (!creds) return { error: 'Immich not configured', status: 400 };
 
   try {
-    // Paginate through all results (Immich limits per-page to 1000)
-    const allAssets: any[] = [];
-    let page = 1;
-    const pageSize = 1000;
-    while (true) {
-      const resp = await safeFetch(`${creds.immich_url}/api/search/metadata`, {
-        method: 'POST',
-        headers: { 'x-api-key': creds.immich_api_key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          takenAfter: from ? `${from}T00:00:00.000Z` : undefined,
-          takenBefore: to ? `${to}T23:59:59.999Z` : undefined,
-          type: 'IMAGE',
-          size: pageSize,
-          page,
-        }),
-        signal: AbortSignal.timeout(15000) as any,
-      });
-      if (!resp.ok) return { error: 'Search failed', status: resp.status };
-      const data = await resp.json() as { assets?: { items?: any[] } };
-      const items = data.assets?.items || [];
-      allAssets.push(...items);
-      if (items.length < pageSize) break; // Last page
-      page++;
-      if (page > 20) break; // Safety limit (20k photos max)
-    }
-    const assets = allAssets.map((a: any) => ({
+    const pageSize = Math.min(Math.max(Number(limit) || 1000, 1), 1000);
+    const startOffset = Math.max(Number(offset) || 0, 0);
+    const page = Math.floor(startOffset / pageSize) + 1;
+    const withinPageOffset = startOffset % pageSize;
+
+    const resp = await safeFetch(`${creds.immich_url}/api/search/metadata`, {
+      method: 'POST',
+      headers: { 'x-api-key': creds.immich_api_key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        takenAfter: from ? `${from}T00:00:00.000Z` : undefined,
+        takenBefore: to ? `${to}T23:59:59.999Z` : undefined,
+        type: 'IMAGE',
+        size: pageSize,
+        page,
+      }),
+      signal: AbortSignal.timeout(15000) as any,
+    });
+
+    if (!resp.ok) return { error: 'Search failed', status: resp.status };
+
+    const data = await resp.json() as { assets?: { items?: any[]; total?: number } };
+    const pageItems = data.assets?.items || [];
+    const slicedItems = pageItems.slice(withinPageOffset, withinPageOffset + pageSize);
+    const assets = slicedItems.map((a: any) => ({
       id: a.id,
       takenAt: a.fileCreatedAt || a.createdAt,
       city: a.exifInfo?.city || null,
       country: a.exifInfo?.country || null,
     }));
-    return { assets };
+
+    const total = typeof data.assets?.total === 'number'
+      ? data.assets.total
+      : startOffset + slicedItems.length + (slicedItems.length === pageSize ? 1 : 0);
+
+    return {
+      assets,
+      total,
+      hasMore: startOffset + slicedItems.length < total,
+    };
   } catch {
     return { error: 'Could not reach Immich', status: 502 };
   }

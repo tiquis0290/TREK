@@ -22,5 +22,16 @@ export function ProviderImg({ baseUrl, style, loading }: ProviderImgProps) {
     }
   }, [baseUrl])
 
-  return src ? <img src={src} alt="" loading={loading} style={style} /> : null
+  if (src) {
+    return <img src={src} alt="" loading={loading} style={style} />
+  }
+  // Show gray rectangle as thumbnail placeholder
+  return (
+    <div
+      style={{
+        background: '#e0e0e0',
+        ...style,
+      }}
+    />
+  )
 }

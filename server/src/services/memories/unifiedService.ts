@@ -52,7 +52,7 @@ export function listTripPhotos(tripId: string, userId: number): ServiceResult<an
       WHERE tp.trip_id = ?
         AND (tp.user_id = ? OR tp.shared = 1)
         AND tp.provider IN (${enabledProviders.map(() => '?').join(',')})
-      ORDER BY tp.added_at ASC
+      ORDER BY tp.taken_at ASC, tp.added_at ASC
     `).all(tripId, userId, ...enabledProviders);
 
     return success(photos);

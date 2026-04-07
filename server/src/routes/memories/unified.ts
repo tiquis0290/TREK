@@ -25,7 +25,7 @@ router.use('/synologyphotos', synologyRouter);
 router.get('/unified/trips/:tripId/photos', authenticate, (req: Request, res: Response) => {
     const authReq = req as AuthRequest;
     const { tripId } = req.params;
-        const result = listTripPhotos(tripId, authReq.user.id);
+    const result = listTripPhotos(tripId, authReq.user.id);
         if ('error' in result) return res.status(result.error.status).json({ error: result.error.message });
         res.json({ photos: result.data });
 });

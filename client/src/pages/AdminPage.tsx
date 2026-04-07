@@ -1551,7 +1551,7 @@ docker run -d --name trek \\
                   await adminApi.rotateJwtSecret()
                   setShowRotateJwtModal(false)
                   logout()
-                  navigate('/login')
+                  navigate('/login', { state: { noRedirect: true } })
                 } catch {
                   toast.error(t('common.error'))
                   setRotatingJwt(false)

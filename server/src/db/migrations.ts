@@ -884,6 +884,33 @@ function runMigrations(db: Database.Database): void {
         ins.run(r.trip_id, r.category, idx++);
       }
     },
+    
+    // Migration 75: Normalize existing Synology URLs to include /photo and no trailing slash
+    () => {
+      const usersWithSynologyUrl = db
+        .prepare("SELECT id, synology_url FROM users WHERE synology_url IS NOT NULL AND TRIM(synology_url) != ''")
+        .all() as Array<{ id: number; synology_url: string }>;
+
+      const updateSynologyUrl = db.prepare('UPDATE users SET synology_url = ? WHERE id = ?');
+
+      for (const user of usersWithSynologyUrl) {
+        let normalizedUrl = user.synology_url.trim().replace(/\/+$/, '');
+
+        if (!/\/photo$/i.test(normalizedUrl)) {
+          normalizedUrl = `${normalizedUrl}/photo`;
+        }
+
+        normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+
+        if (normalizedUrl !== user.synology_url) {
+          updateSynologyUrl.run(normalizedUrl, user.id);
+        }
+      }
+    },
+    () => {
+      db.exec(`alter table trip_photos add column taken_at datetime default null`);
+      db.exec(`alter table trip_photos add column city text default null`);
+    }
   ];
 
   if (currentVersion < migrations.length) {

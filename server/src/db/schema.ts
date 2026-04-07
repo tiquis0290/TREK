@@ -458,6 +458,19 @@ function createTables(db: Database.Database): void {
       PRIMARY KEY (user_id, event_type, channel)
     );
     CREATE INDEX IF NOT EXISTS idx_ncp_user ON notification_channel_preferences(user_id);
+
+    CREATE TABLE IF NOT EXISTS trip_photos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        asset_id TEXT NOT NULL,
+        shared INTEGER NOT NULL DEFAULT 1,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        taken_at DATETIME DEFAULT NULL,
+        city TEXT,
+        provider TEXT NOT NULL,
+        album_link_id INTEGER REFERENCES trip_album_links(id) ON DELETE SET NULL,
+        UNIQUE(trip_id, user_id, asset_id)
   `);
 }
 

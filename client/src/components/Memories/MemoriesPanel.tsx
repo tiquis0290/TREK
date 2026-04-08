@@ -12,6 +12,8 @@ import { PhotoElement } from './components/PhotoElement'
 import { createMemoriesUrlBuilders } from './urlBuilders'
 import { deriveVisibleMemories } from './selectors'
 import type { PhotoProvider, TripPhoto, MemoriesPanelProps, AlbumLink } from './types'
+import { PhotoGallery } from './components/PhotoGallery'
+import { useState as useReactState } from 'react';
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
@@ -35,6 +37,8 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   // Filters & sort
   const [sortAsc, setSortAsc] = useState(true)
   const [locationFilter, setLocationFilter] = useState('')
+  // Sorting/grouping for gallery
+  const [groupBy, setGroupBy] = useReactState<'day' | 'week' | 'month'>('day');
 
   // Album linking
   const [showAlbumPicker, setShowAlbumPicker] = useState(false)
@@ -161,34 +165,6 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   }
 
 
-  // ── Remove photo ──────────────────────────────────────────────────────────
-
-  const removePhoto = async (photo: TripPhoto) => {
-    try {
-      await apiClient.delete(buildUnifiedUrl('photos'), {
-        data: {
-          asset_id: photo.asset_id,
-          provider: photo.provider,
-        },
-      })
-      setTripPhotos(prev => prev.filter(p => !(p.provider === photo.provider && p.asset_id === photo.asset_id)))
-    } catch { toast.error(t('memories.error.removePhoto')) }
-  }
-
-  // ── Toggle sharing ────────────────────────────────────────────────────────
-
-  const toggleSharing = async (photo: TripPhoto, shared: boolean) => {
-    try {
-      await apiClient.put(buildUnifiedUrl('photos', 'sharing'), {
-        shared,
-        asset_id: photo.asset_id,
-        provider: photo.provider,
-      })
-      setTripPhotos(prev => prev.map(p =>
-        p.provider === photo.provider && p.asset_id === photo.asset_id ? { ...p, shared: shared ? 1 : 0 } : p
-      ))
-    } catch { toast.error(t('memories.error.toggleSharing')) }
-  }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -340,7 +316,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
       {/* Filter & Sort bar */}
       {allVisibleRaw.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, padding: '8px 20px', borderBottom: '1px solid var(--border-secondary)', flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, padding: '8px 20px', borderBottom: '1px solid var(--border-secondary)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={() => setSortAsc(v => !v)}
             style={{
               display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 8,
@@ -349,6 +325,16 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
             }}>
             <ArrowUpDown size={11} /> {sortAsc ? t('memories.oldest') : t('memories.newest')}
           </button>
+          <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
+            style={{
+                padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border-primary)',
+                background: 'var(--bg-card)', fontSize: 11, fontFamily: 'inherit', color: 'var(--text-muted)',
+                cursor: 'pointer', outline: 'none',
+              }}>
+            <option value="day">{t('memories.day') || 'Day'}</option>
+            <option value="week">{t('memories.week') || 'Week'}</option>
+            <option value="month">{t('memories.month') || 'Month'}</option>
+          </select>
           {locations.length > 1 && (
             <select value={locationFilter} onChange={e => setLocationFilter(e.target.value)}
               style={{
@@ -363,43 +349,17 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
         </div>
       )}
 
-      {/* Gallery */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
-        {allVisible.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <Camera size={40} style={{ color: 'var(--text-faint)', margin: '0 auto 12px', display: 'block' }} />
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 12px' }}>
-              {t('memories.noPhotos')}
-            </p>
-            <button onClick={openPicker}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5, padding: '9px 18px', borderRadius: 10,
-                border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-              <Plus size={15} /> {t('memories.addPhotos')}
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 6 }}>
-            {allVisible.map(photo => (
-              <PhotoElement
-                key={`${photo.provider}:${photo.asset_id}`}
-                photo={photo}
-                currentUserId={currentUser?.id}
-                buildProviderAssetUrl={buildProviderAssetUrl}
-                onOpenLightbox={openLightbox}
-                onToggleSharing={toggleSharing}
-                onRemovePhoto={removePhoto}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        .memories-avatar:hover .memories-avatar-tooltip { opacity: 1 !important; }
-      `}</style>
+      <PhotoGallery
+        allVisible={allVisible}
+        currentUser={currentUser}
+        buildProviderAssetUrl={buildProviderAssetUrl}
+        openLightbox={openLightbox}
+        openPicker={openPicker}
+        setTripPhotos={setTripPhotos}
+        tripId={tripId}
+        groupBy={groupBy}
+        sortOrder={sortAsc ? 'oldest' : 'newest'}
+      />
 
       <MemoriesLightbox
         allVisible={allVisible}

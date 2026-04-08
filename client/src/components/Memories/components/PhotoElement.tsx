@@ -1,4 +1,5 @@
-import { Eye, EyeOff, X } from 'lucide-react'
+import { Eye, EyeOff, X, Check, Plus, Minus } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from '../../../i18n'
 import { ProviderImg } from './ProviderImg'
 import type { TripPhoto } from '../types'
@@ -10,6 +11,10 @@ interface PhotoElementProps {
   onOpenLightbox: (photo: TripPhoto) => void
   onToggleSharing: (photo: TripPhoto, shared: boolean) => void
   onRemovePhoto: (photo: TripPhoto) => void
+  selectable?: boolean
+  selected?: boolean
+  disabled?: boolean
+  onSelect?: (photo: TripPhoto) => void
 }
 
 export function PhotoElement({
@@ -19,16 +24,41 @@ export function PhotoElement({
   onOpenLightbox,
   onToggleSharing,
   onRemovePhoto,
+  selectable,
+  selected,
+  disabled,
+  onSelect,
 }: PhotoElementProps) {
   const { t } = useTranslation()
+  const [hovered, setHovered] = useState(false)
   const isOwn = photo.user_id === currentUserId
   const usernameInitial = (photo.username?.[0] || '?').toUpperCase()
+
+  const handleClick = () => {
+    if (selectable) {
+      if (!disabled && onSelect) onSelect(photo)
+      return
+    }
+
+    onOpenLightbox(photo)
+  }
 
   return (
     <div
       className="group"
-      style={{ position: 'relative', aspectRatio: '1', borderRadius: 10, overflow: 'visible', cursor: 'pointer' }}
-      onClick={() => onOpenLightbox(photo)}
+      style={{
+        position: 'relative',
+        aspectRatio: '1',
+        borderRadius: 8,
+        overflow: 'hidden',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.3 : 1,
+        outline: selectable && selected ? '3px solid var(--text-primary)' : 'none',
+        outlineOffset: selectable && selected ? -3 : undefined,
+      }}
+      onClick={handleClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       <ProviderImg
         baseUrl={buildProviderAssetUrl(photo, 'thumbnail')}
@@ -36,7 +66,79 @@ export function PhotoElement({
         style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10 }}
       />
 
-      {!isOwn && (
+      {selectable && hovered && !selected && !disabled && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.28)',
+            color: 'white',
+            zIndex: 5,
+          }}
+        >
+          <Plus size={20} />
+        </div>
+      )}
+      {selectable && selected && (
+        <>
+          <div
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              background: 'var(--text-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 6,
+            }}
+          >
+            <Check size={14} color="var(--bg-primary)" />
+          </div>
+          {hovered && !disabled && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0,0,0,0.28)',
+                color: 'white',
+                zIndex: 5,
+              }}
+            >
+              <Minus size={20} />
+            </div>
+          )}
+        </>
+      )}
+      {selectable && disabled && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.36)',
+            color: 'white',
+            fontSize: 10,
+            fontWeight: 600,
+            zIndex: 5,
+          }}
+        >
+          {t('memories.alreadyAdded')}
+        </div>
+      )}
+
+      {!selectable && !isOwn && (
         <div className="memories-avatar" style={{ position: 'absolute', bottom: 6, left: 6, zIndex: 10 }}>
           <div
             style={{
@@ -82,7 +184,7 @@ export function PhotoElement({
         </div>
       )}
 
-      {isOwn && (
+      {isOwn && !selectable && (
         <div
           className="opacity-0 group-hover:opacity-100"
           style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 3, transition: 'opacity 0.15s' }}
@@ -131,7 +233,7 @@ export function PhotoElement({
         </div>
       )}
 
-      {isOwn && !photo.shared && (
+      {isOwn && !selectable && !photo.shared && (
         <div
           style={{
             position: 'absolute',

@@ -1,7 +1,6 @@
-import { Photo, User } from "../../../types";
+import { User } from "../../../types";
 
 import { Camera, Plus, X, ArrowUpDown, Link2, RefreshCw, FolderOpen } from 'lucide-react'
-import { useState } from 'react';
 import { PhotoElement } from "./PhotoElement";
 import { TripPhoto } from "../types";
 import apiClient from "../../../api/client";
@@ -22,9 +21,13 @@ interface PhotoGalleryProps {
   tripId: number;
   groupBy: 'day' | 'week' | 'month';
   sortOrder: 'newest' | 'oldest';
+  selectionEnabled?: boolean;
+  selectedIds?: Set<string>;
+  disabledIds?: Set<string>;
+  onToggleSelect?: (photo: TripPhoto) => void;
 }
 
-export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, openLightbox, openPicker, setTripPhotos, tripId, groupBy, sortOrder }: PhotoGalleryProps) {
+export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, openLightbox, openPicker, setTripPhotos, tripId, groupBy, sortOrder, selectionEnabled, selectedIds, disabledIds, onToggleSelect }: PhotoGalleryProps) {
   const { t } = useTranslation()
   const toast = useToast()
     
@@ -144,17 +147,27 @@ export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, o
                 {key}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 6 }}>
-              {grouped[key].map(photo => (
-                <PhotoElement
-                  key={`${photo.provider}:${photo.asset_id}`}
-                  photo={photo}
-                  currentUserId={currentUser?.id}
-                  buildProviderAssetUrl={buildProviderAssetUrl}
-                  onOpenLightbox={openLightbox}
-                  onToggleSharing={toggleSharing}
-                  onRemovePhoto={removePhoto}
-                />
-              ))}
+              {grouped[key].map(photo => {
+                const photoKey = `${photo.provider}::${photo.asset_id}`
+                const selected = selectedIds?.has(photoKey) ?? false
+                const disabled = disabledIds?.has(photoKey) ?? false
+                const selectionMode = Boolean(selectionEnabled && onToggleSelect)
+                return (
+                  <PhotoElement
+                    key={photoKey}
+                    photo={photo}
+                    currentUserId={currentUser?.id}
+                    buildProviderAssetUrl={buildProviderAssetUrl}
+                    onOpenLightbox={selectionMode ? () => {} : openLightbox}
+                    onToggleSharing={toggleSharing}
+                    onRemovePhoto={removePhoto}
+                    selectable={selectionMode}
+                    selected={selected}
+                    disabled={disabled}
+                    onSelect={onToggleSelect}
+                  />
+                )
+              })}
             </div>
           </div>
         ))

@@ -5,6 +5,7 @@ import { clearImageQueue } from '../../../api/authUrl'
 import { useTranslation } from '../../../i18n'
 import { useToast } from '../../shared/Toast'
 import { ProviderImg } from './ProviderImg'
+import { PhotoGallery } from './PhotoGallery'
 import { ConfirmShareModal } from './ConfirmShareModal'
 import { PickerTemplate } from './PickerTemplate'
 import { buildProviderAssetMemoriesUrl, buildProviderMemoriesUrl, createMemoriesUrlBuilders } from '../urlBuilders'
@@ -81,9 +82,7 @@ export function PhotoPickerModal({
           const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: selectedProvider }))
           setPickerPhotos(prev => append ? [...prev, ...incoming] : incoming)
           setPickerOffset(offset + incoming.length)
-          console.log('Received', incoming.length, 'photos from provider, total now', append ? pickerPhotos.length + incoming.length : incoming.length)
           setPickerHasMore(Boolean(res.data.hasMore) && incoming.length > 0)
-          console.log('Has more?', res.data.hasMore, 'hasMore state now', Boolean(res.data.hasMore) && incoming.length > 0);
         }
       } catch {
         if (active) {
@@ -234,17 +233,6 @@ export function PhotoPickerModal({
   // Helper functions
   const makePickerKey = (provider: string, assetId: string): string => `${provider}::${assetId}`
 
-  const buildProviderAssetUrlFromAsset = (asset: Asset, what: string, userId: number): string => {
-    const photo: TripPhoto = {
-      asset_id: asset.id,
-      provider: asset.provider,
-      user_id: userId,
-      username: '',
-      shared: 0,
-      added_at: null
-    }
-    return buildProviderAssetMemoriesUrl(tripId, photo, what)
-  }
   const alreadyAdded = new Set(
     tripPhotos
       .filter(p => p.user_id === currentUserId)
@@ -259,6 +247,18 @@ export function PhotoPickerModal({
       return next
     })
   }
+
+  const buildPickerPhoto = (asset: Asset): TripPhoto => ({
+    provider: asset.provider,
+    asset_id: asset.id,
+    user_id: currentUserId || 0,
+    username: '',
+    shared: alreadyAdded.has(makePickerKey(asset.provider, asset.id)) ? 1 : 0,
+    added_at: asset.takenAt || new Date().toISOString(),
+    taken_at: asset.takenAt || null,
+  })
+
+  const pickerTripPhotos = pickerPhotos.map(buildPickerPhoto)
 
   const confirmSelection = () => {
     if (selectedIds.size === 0) return
@@ -352,104 +352,31 @@ export function PhotoPickerModal({
             )}
           </div>
         ) : (
-          (() => {
-            const byMonth: Record<string, Asset[]> = {}
-            for (const asset of pickerPhotos) {
-              const d = asset.takenAt ? new Date(asset.takenAt) : null
-              const key = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : 'unknown'
-              if (!byMonth[key]) byMonth[key] = []
-              byMonth[key].push(asset)
-            }
-
-            const sortedMonths = Object.keys(byMonth).sort().reverse()
-
-            return (
-              <>
-                {sortedMonths.map(month => (
-                  <div key={month} style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, paddingLeft: 2 }}>
-                      {month !== 'unknown'
-                        ? new Date(month + '-15').toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-                        : '-'}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 4 }}>
-                      {byMonth[month].map(asset => {
-                        const pickerKey = makePickerKey(asset.provider, asset.id)
-                        const isSelected = selectedIds.has(pickerKey)
-                        const isAlready = alreadyAdded.has(pickerKey)
-
-                        return (
-                          <div
-                            key={pickerKey}
-                            onClick={() => !isAlready && onTogglePickerSelect(pickerKey)}
-                            style={{
-                              position: 'relative',
-                              aspectRatio: '1',
-                              borderRadius: 8,
-                              overflow: 'hidden',
-                              cursor: isAlready ? 'default' : 'pointer',
-                              opacity: isAlready ? 0.3 : 1,
-                              outline: isSelected ? '3px solid var(--text-primary)' : 'none',
-                              outlineOffset: -3,
-                            }}
-                          >
-                            <ProviderImg
-                              baseUrl={buildProviderAssetUrlFromAsset(asset, 'thumbnail', currentUserId || 0)}
-                              loading="lazy"
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
-                            {isSelected && (
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  top: 4,
-                                  right: 4,
-                                  width: 22,
-                                  height: 22,
-                                  borderRadius: '50%',
-                                  background: 'var(--text-primary)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Check size={13} color="var(--bg-primary)" />
-                              </div>
-                            )}
-                            {isAlready && (
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  inset: 0,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  background: 'rgba(0,0,0,0.3)',
-                                  fontSize: 10,
-                                  color: 'white',
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {t('memories.alreadyAdded')}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-                {pickerLoadingMore && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
-                    <div
-                      className="w-7 h-7 border-2 rounded-full animate-spin"
-                      style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }}
-                    />
-                  </div>
-                )}
-              </>
-            )
-          })()
+          <>
+            <PhotoGallery
+              allVisible={pickerTripPhotos}
+              currentUser={currentUserId ? { id: currentUserId } as any : null}
+              buildProviderAssetUrl={(photo, what) => buildProviderAssetMemoriesUrl(tripId, photo, what)}
+              openLightbox={(_photo: TripPhoto) => {}}
+              openPicker={() => {}}
+              setTripPhotos={(_photos: TripPhoto[]) => {}}
+              tripId={tripId}
+              groupBy="month"
+              sortOrder="newest"
+              selectionEnabled
+              selectedIds={selectedIds}
+              disabledIds={alreadyAdded}
+              onToggleSelect={(photo) => onTogglePickerSelect(makePickerKey(photo.provider, photo.asset_id))}
+            />
+            {pickerLoadingMore && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
+                <div
+                  className="w-7 h-7 border-2 rounded-full animate-spin"
+                  style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }}
+                />
+              </div>
+            )}
+          </>
         )}
       </PickerTemplate>
 

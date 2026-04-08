@@ -13,8 +13,9 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
 
   useEffect(() => {
     let revoke = ''
-    let canceled = false
     let observer: IntersectionObserver | null = null
+    let controller = new AbortController()
+    let loadingPending = false
 
     const cleanup = () => {
       if (revoke) {
@@ -23,16 +24,75 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
       }
     }
 
-    const loadImage = async () => {
-      if (canceled || src) return
-      try {
-        const blobUrl = await fetchImageAsBlob('/api' + baseUrl)
-        if (!canceled) {
-          revoke = blobUrl
-          setSrc(blobUrl)
+    const ensureController = () => {
+      if (controller.signal.aborted) {
+        controller = new AbortController()
+      }
+    }
+
+    const validateImageUrl = (url: string, signal: AbortSignal): Promise<boolean> => {
+      return new Promise<boolean>(resolve => {
+        const img = new Image()
+        let settled = false
+
+        const cleanupValidation = () => {
+          if (settled) return
+          settled = true
+          img.onload = null
+          img.onerror = null
+          URL.revokeObjectURL(url)
         }
+
+        img.onload = () => {
+          if (settled) return
+          cleanupValidation()
+          resolve(true)
+        }
+        img.onerror = () => {
+          if (settled) return
+          cleanupValidation()
+          resolve(false)
+        }
+
+        signal.addEventListener('abort', () => {
+          if (settled) return
+          cleanupValidation()
+          resolve(false)
+        }, { once: true })
+
+        img.src = url
+      })
+    }
+
+    const loadImage = async () => {
+      if (src || loadingPending) return
+      ensureController()
+      loadingPending = true
+      try {
+        if (controller.signal.aborted) return
+
+        const blobUrl = await fetchImageAsBlob('/api' + baseUrl, controller.signal)
+        if (!blobUrl) {
+          loadingPending = false
+          return
+        }
+        if (controller.signal.aborted) {
+          URL.revokeObjectURL(blobUrl)
+          loadingPending = false
+          return
+        }
+        const valid = await validateImageUrl(blobUrl, controller.signal)
+        if (valid) {
+          revoke = blobUrl
+          loadingPending = false
+          setSrc(blobUrl)
+          return
+        }
+        URL.revokeObjectURL(blobUrl)
+        loadingPending = false
       } catch {
-        // ignore failures; leave placeholder visible
+        loadingPending = false
+        setSrc('')
       }
     }
 
@@ -43,7 +103,6 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
       if (!element || typeof IntersectionObserver === 'undefined') {
         loadImage()
       } else {
-        // Find the nearest scrollable parent
         function getScrollableParent(node: HTMLElement | null): HTMLElement | null {
           while (node) {
             const style = window.getComputedStyle(node)
@@ -61,24 +120,24 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
         const rootHeight = scrollParent ? scrollParent.clientHeight : window.innerHeight
         observer = new IntersectionObserver(
           entries => {
-            if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0)) {
+            const visible = entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0)
+            if (visible) {
               loadImage()
-              if (observer && element) {
-                observer.unobserve(element)
-              }
+            } else if (loadingPending) {
+              controller.abort()
             }
           },
-          { root: root, rootMargin: `${rootHeight * 2}px` }
+          { root: root, rootMargin: `${rootHeight}px` }
         )
         observer.observe(element)
       }
     }
 
     return () => {
-      canceled = true
-      if (observer && wrapperRef.current) {
+      if (observer) {
         observer.disconnect()
       }
+      controller.abort()
       cleanup()
     }
   }, [baseUrl, loading, src])

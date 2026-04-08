@@ -183,7 +183,6 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     let nextShow = showCompactHeader
     let mindelta = 10
 
-    console.log({ scrollTop, delta, minShow, showCompactHeader, isAtTop })
     setIsAtTop(scrollTop < 1)
     if (scrollTop === 0) {
       nextShow = false

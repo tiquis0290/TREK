@@ -301,7 +301,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 2,
+        zIndex: 15,
         overflow: 'hidden',
         transition: !isAtTop ? 'opacity 80ms ease, transform 160ms ease' : 'none',
         transform: !isAtTop ? showCompactHeader ? 'translateY(0)' : 'translateY(-100%)' : 'none',

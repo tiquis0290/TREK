@@ -27,6 +27,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [availableProviders, setAvailableProviders] = useState<PhotoProvider[]>([])
   const [selectedProvider, setSelectedProvider] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const [loadingContent, setLoadingContent] = useState(true)
 
   // Trip photos (saved selections)
   const [tripPhotos, setTripPhotos] = useState<TripPhoto[]>([])
@@ -93,7 +94,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     const handler = () => loadPhotos()
     loadInitial()
     window.addEventListener('memories:updated', handler)
-    return () => { 
+    return () => {
       window.removeEventListener('memories:updated', handler);
       clearImageQueue();
     }
@@ -144,12 +145,18 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       setAvailableProviders([])
       setConnected(false)
     } finally {
-      await loadPhotos()
-      await loadAlbumLinks()
       setLoading(false)
+      await loadContent()
     }
   }
 
+
+  const loadContent = async () => {
+    setLoadingContent(true)
+    await loadPhotos()
+    await loadAlbumLinks()
+    setLoadingContent(false)
+  }
   // ── Photo Picker ──────────────────────────────────────────────────────────
 
   const [pickerDateFilter, setPickerDateFilter] = useState(true)
@@ -217,7 +224,12 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
           albumLinks={albumLinks}
           onReloadAlbumLinks={loadAlbumLinks}
           onSyncAlbum={syncAlbum}
-          onClose={() => { setShowAlbumPicker(false) }}
+          onClose={async () => {
+            setLoadingContent(true);
+            setShowAlbumPicker(false);
+            await new Promise<void>(resolve => setTimeout(resolve, 5));
+            setLoadingContent(false);
+          }}
         />
       </div>
     )
@@ -240,9 +252,14 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
           onAdded={async () => {
             setShowPicker(false)
             clearImageQueue()
-            await loadInitial()
+            await loadContent()
           }}
-          onClose={() => setShowPicker(false)}
+          onClose={async () => {
+            setLoadingContent(true);
+            setShowPicker(false);
+            await new Promise<void>(resolve => setTimeout(resolve, 5));
+            setLoadingContent(false);
+          }}
         />
       </div>
     )
@@ -289,7 +306,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
         {/* Linked Albums */}
         {albumLinks.length > 0 && (
-          <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--border-secondary)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ padding: '8px 20px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {albumLinks.map(link => (
               <div key={link.id} style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8,
@@ -317,7 +334,12 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       {/* Filter & Sort bar */}
       {allVisibleRaw.length > 0 && (
         <div style={{ display: 'flex', gap: 6, padding: '8px 20px', borderBottom: '1px solid var(--border-secondary)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={() => setSortAsc(v => !v)}
+          <button onClick={async () => {
+            setLoadingContent(true);
+            setSortAsc(!sortAsc);
+            await new Promise<void>(resolve => setTimeout(resolve, 5));
+            setLoadingContent(false);
+          }}
             style={{
               display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 8,
               border: '1px solid var(--border-primary)', background: 'var(--bg-card)',
@@ -325,18 +347,28 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
             }}>
             <ArrowUpDown size={11} /> {sortAsc ? t('memories.oldest') : t('memories.newest')}
           </button>
-          <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
+          <select value={groupBy} onChange={async (e) => {
+            setLoadingContent(true);
+            setGroupBy(e.target.value as 'day' | 'week' | 'month');
+            await new Promise<void>(resolve => setTimeout(resolve, 5));
+            setLoadingContent(false);
+          }}
             style={{
-                padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border-primary)',
-                background: 'var(--bg-card)', fontSize: 11, fontFamily: 'inherit', color: 'var(--text-muted)',
-                cursor: 'pointer', outline: 'none',
-              }}>
+              padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border-primary)',
+              background: 'var(--bg-card)', fontSize: 11, fontFamily: 'inherit', color: 'var(--text-muted)',
+              cursor: 'pointer', outline: 'none',
+            }}>
             <option value="day">{t('memories.day') || 'Day'}</option>
             <option value="week">{t('memories.week') || 'Week'}</option>
             <option value="month">{t('memories.month') || 'Month'}</option>
           </select>
           {locations.length > 1 && (
-            <select value={locationFilter} onChange={e => setLocationFilter(e.target.value)}
+            <select value={locationFilter} onChange={async (e) => {
+              setLoadingContent(true);
+              setLocationFilter(e.target.value);
+              await new Promise<void>(resolve => setTimeout(resolve, 5));
+              setLoadingContent(false);
+            }}
               style={{
                 padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border-primary)',
                 background: 'var(--bg-card)', fontSize: 11, fontFamily: 'inherit', color: 'var(--text-muted)',
@@ -349,24 +381,33 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
         </div>
       )}
 
-      <PhotoGallery
-        allVisible={allVisible}
-        currentUser={currentUser}
-        buildProviderAssetUrl={buildProviderAssetUrl}
-        openLightbox={openLightbox}
-        openPicker={openPicker}
-        setTripPhotos={setTripPhotos}
-        tripId={tripId}
-        groupBy={groupBy}
-        sortOrder={sortAsc ? 'oldest' : 'newest'}
-      />
+      {loadingContent ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+          <div className="w-8 h-8 border-2 rounded-full animate-spin"
+            style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }} />
+        </div>
+      ) : (
+        <>
+          <PhotoGallery
+            allVisible={allVisible}
+            currentUser={currentUser}
+            buildProviderAssetUrl={buildProviderAssetUrl}
+            openLightbox={openLightbox}
+            openPicker={openPicker}
+            setTripPhotos={setTripPhotos}
+            tripId={tripId}
+            groupBy={groupBy}
+            sortOrder={sortAsc ? 'oldest' : 'newest'}
+          />
 
-      <MemoriesLightbox
-        allVisible={allVisible}
-        tripId={tripId}
-        initialPhoto={lightboxPhoto}
-        onClose={() => setLightbox(null)}
-      />
+          <MemoriesLightbox
+            allVisible={allVisible}
+            tripId={tripId}
+            initialPhoto={lightboxPhoto}
+            onClose={() => setLightbox(null)}
+          />
+        </>
+      )}
     </div>
   )
 }

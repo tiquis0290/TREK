@@ -19,6 +19,7 @@ export function MemoriesLightbox({
   onClose,
 }: MemoriesLightboxProps) {
   const touchStartX = useRef<number | null>(null)
+  const currentIndex = useRef<number>(-1)
   const [lightboxInfo, setLightboxInfo] = useState<any>(null)
   const [lightboxInfoLoading, setLightboxInfoLoading] = useState(false)
   const [lightboxOriginalSrc, setLightboxOriginalSrc] = useState('')
@@ -27,7 +28,55 @@ export function MemoriesLightbox({
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
   const [currentPhoto, setCurrentPhoto] = useState<TripPhoto | null>(initialPhoto)
 
+  const imageCacheRef = useRef<Record<string, string>>({})
+  const infoCacheRef = useRef<Record<string, any>>({})
+  const pendingImageFetches = useRef<Record<string, Promise<void>>>({})
+  const pendingInfoFetches = useRef<Record<string, Promise<void>>>({})
+  const pendingImageControllers = useRef<Record<string, AbortController>>({})
+  const lastNavigation = useRef<'prev' | 'next' | null>(null)
+
+  const getPhotoKey = (photo: TripPhoto) => `${photo.provider}::${photo.asset_id}::${photo.user_id}`
+
+
+  const prefetchPhoto = (photo: TripPhoto, index: number, direction: -1 | 1) => {
+    const key = getPhotoKey(photo)
+
+    if (!imageCacheRef.current[key]) {
+      if (!pendingImageFetches.current[key]) {
+        const controller = new AbortController()
+        pendingImageControllers.current[key] = controller
+        pendingImageFetches.current[key] = fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, photo, 'original'), controller.signal)
+          .then(blobUrl => {
+            if (blobUrl) imageCacheRef.current[key] = blobUrl
+            const newIndex = index + direction
+            if (currentIndex.current > -1 && Math.abs(currentIndex.current - newIndex) < 4) prefetchPhoto(allVisible[newIndex], newIndex, direction)
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            delete pendingImageFetches.current[key]
+            delete pendingImageControllers.current[key]
+          })
+      }
+    }
+    else {
+      const newIndex = index + direction
+      if (currentIndex.current > -1 && Math.abs(currentIndex.current - newIndex) < 4) prefetchPhoto(allVisible[newIndex], newIndex, direction)
+    }
+
+    if (!infoCacheRef.current[key] && !pendingInfoFetches.current[key]) {
+      pendingInfoFetches.current[key] = apiClient.get(buildProviderAssetMemoriesUrl(tripId, photo, 'info'))
+        .then(r => {
+          infoCacheRef.current[key] = r.data
+        })
+        .catch(() => {
+          infoCacheRef.current[key] = null
+        })
+        .finally(() => { delete pendingInfoFetches.current[key] })
+    }
+  }
+
   useEffect(() => {
+    lastNavigation.current = null
     setCurrentPhoto(initialPhoto)
   }, [initialPhoto])
 
@@ -37,75 +86,126 @@ export function MemoriesLightbox({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const currentIdx = currentPhoto
-    ? allVisible.findIndex(p => p.provider === currentPhoto.provider && p.asset_id === currentPhoto.asset_id && p.user_id === currentPhoto.user_id)
-    : -1
-  const hasPrev = currentIdx > 0
-  const hasNext = currentIdx < allVisible.length - 1
+
+  const hasPrev = currentIndex.current > 0
+  const hasNext = currentIndex.current < allVisible.length - 1
 
   useEffect(() => {
     if (!currentPhoto) return
-    if (currentIdx < 0) {
+    const index = currentPhoto
+      ? allVisible.findIndex(p => p.provider === currentPhoto.provider && p.asset_id === currentPhoto.asset_id && p.user_id === currentPhoto.user_id)
+      : -1
+    currentIndex.current = index
+    if (index < 0) {
       setCurrentPhoto(null)
       onClose()
     }
-  }, [currentIdx, currentPhoto, onClose])
+  }, [currentPhoto, allVisible, onClose])
 
   useEffect(() => {
     if (!currentPhoto) return
 
-    let revoked = ''
+    const key = getPhotoKey(currentPhoto)
     let active = true
 
-    setShowMobileInfo(false)
-    setLightboxInfo(null)
-    setLightboxInfoLoading(true)
-    setLightboxOriginalSrc('')
-    setLightboxImageLoading(true)
+    const prefetchNeighbors = () => {
+      const prevPhoto = allVisible[currentIndex.current - 1]
+      const nextPhoto = allVisible[currentIndex.current + 1]
+      if (prevPhoto) prefetchPhoto(prevPhoto, currentIndex.current - 1, -1)
+      if (nextPhoto) prefetchPhoto(nextPhoto, currentIndex.current + 1, +1)
+    }
 
-    fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'original'))
-      .then(blobUrl => {
-        if (!active) {
-          URL.revokeObjectURL(blobUrl)
-          return
-        }
-        revoked = blobUrl
+    setLightboxInfo(infoCacheRef.current[key] ?? null)
+    setLightboxInfoLoading(!infoCacheRef.current[key])
+    setLightboxOriginalSrc(imageCacheRef.current[key] ?? '')
+    setLightboxImageLoading(!imageCacheRef.current[key])
+
+    if (!imageCacheRef.current[key]) {
+      Object.entries(pendingImageControllers.current).filter(([controllerKey]) => controllerKey !== key).forEach(([, controller]) => controller.abort())
+      if (!pendingImageFetches.current[key]) {
+        const controller = new AbortController()
+        pendingImageControllers.current[key] = controller
+        pendingImageFetches.current[key] = fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'original'), controller.signal)
+          .then(blobUrl => {
+            if (blobUrl) imageCacheRef.current[key] = blobUrl
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            delete pendingImageFetches.current[key]
+            delete pendingImageControllers.current[key]
+          })
+      }
+      pendingImageFetches.current[key]
+        .then(() => {
+          const blobUrl = imageCacheRef.current[key]
+          if (active) {
+            setLightboxOriginalSrc(blobUrl)
+            setLightboxImageLoading(false)
+            prefetchNeighbors()
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setLightboxOriginalSrc('')
+            setLightboxImageLoading(false)
+          }
+        })
+    } else {
+      const blobUrl = imageCacheRef.current[key]
+      if (active) {
         setLightboxOriginalSrc(blobUrl)
         setLightboxImageLoading(false)
-      })
-      .catch(() => {
-        if (active) {
-          setLightboxOriginalSrc('')
-          setLightboxImageLoading(false)
-        }
-      })
+        prefetchNeighbors()
+      }
+    }
 
-    apiClient.get(buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'info'))
-      .then(r => { if (active) setLightboxInfo(r.data) })
-      .catch(() => { if (active) setLightboxInfo(null) })
-      .finally(() => { if (active) setLightboxInfoLoading(false) })
+    if (!infoCacheRef.current[key]) {
+      pendingInfoFetches.current[key] = apiClient.get(buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'info'))
+        .then(r => {
+          infoCacheRef.current[key] = r.data
+          if (active) setLightboxInfo(r.data)
+        })
+        .catch(() => {
+          infoCacheRef.current[key] = null
+          if (active) setLightboxInfo(null)
+        })
+        .finally(() => { if (active) setLightboxInfoLoading(false); delete pendingInfoFetches.current[key] })
+    }
 
     return () => {
       active = false
-      if (revoked) URL.revokeObjectURL(revoked)
     }
-  }, [currentPhoto, tripId])
+  }, [currentPhoto, currentIndex, tripId, allVisible])
+
+  useEffect(() => {
+    return () => {
+      Object.values(imageCacheRef.current).forEach(URL.revokeObjectURL)
+    }
+  }, [])
 
   if (!currentPhoto) return null
 
   const closeLightbox = () => {
+    currentIndex.current = -1
+    Object.values(pendingImageControllers.current).forEach(controller => controller.abort())
     setCurrentPhoto(null)
     onClose()
   }
 
   const goPrev = () => {
-    const photo = allVisible[currentIdx - 1]
-    if (photo) setCurrentPhoto(photo)
+    const photo = allVisible[currentIndex.current - 1]
+    if (photo) {
+      lastNavigation.current = 'prev'
+      setCurrentPhoto(photo)
+    }
   }
 
   const goNext = () => {
-    const photo = allVisible[currentIdx + 1]
-    if (photo) setCurrentPhoto(photo)
+    const photo = allVisible[currentIndex.current + 1]
+    if (photo) {
+      lastNavigation.current = 'next'
+      setCurrentPhoto(photo)
+    }
   }
 
   const exifContent = lightboxInfo ? (
@@ -263,7 +363,7 @@ export function MemoriesLightbox({
 
       {allVisible.length > 1 && (
         <div style={{ position: 'absolute', top: '0.5292cm', left: '0.5292cm', zIndex: 10, fontSize: '0.3175cm', color: 'rgba(255,255,255,0.5)' }}>
-          {currentIdx + 1} / {allVisible.length}
+          {currentIndex.current + 1} / {allVisible.length}
         </div>
       )}
 

@@ -37,6 +37,40 @@ export function MemoriesLightbox({
 
   const getPhotoKey = (photo: TripPhoto) => `${photo.provider}::${photo.asset_id}::${photo.user_id}`
 
+  
+    const validateImageUrl = (url: string, signal: AbortSignal): Promise<boolean> => {
+      return new Promise<boolean>(resolve => {
+        const img = new Image()
+        let settled = false
+
+        const cleanupValidation = () => {
+          if (settled) return
+          settled = true
+          img.onload = null
+          img.onerror = null
+          URL.revokeObjectURL(url)
+        }
+
+        img.onload = () => {
+          if (settled) return
+          cleanupValidation()
+          resolve(true)
+        }
+        img.onerror = () => {
+          if (settled) return
+          cleanupValidation()
+          resolve(false)
+        }
+
+        signal.addEventListener('abort', () => {
+          if (settled) return
+          cleanupValidation()
+          resolve(false)
+        }, { once: true })
+
+        img.src = url
+      })
+    }
 
   const prefetchPhoto = (photo: TripPhoto, index: number, direction: -1 | 1) => {
     const key = getPhotoKey(photo)
@@ -45,9 +79,10 @@ export function MemoriesLightbox({
       if (!pendingImageFetches.current[key]) {
         const controller = new AbortController()
         pendingImageControllers.current[key] = controller
-        pendingImageFetches.current[key] = fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, photo, 'original'), controller.signal)
+        pendingImageFetches.current[key] = fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, photo, 'preview'), controller.signal)
           .then(blobUrl => {
-            if (blobUrl) imageCacheRef.current[key] = blobUrl
+            if (blobUrl && validateImageUrl(blobUrl, controller.signal)) imageCacheRef.current[key] = blobUrl
+            else if (blobUrl) URL.revokeObjectURL(blobUrl)
             const newIndex = index + direction
             if (currentIndex.current > -1 && Math.abs(currentIndex.current - newIndex) < 4) prefetchPhoto(allVisible[newIndex], newIndex, direction)
           })
@@ -125,9 +160,10 @@ export function MemoriesLightbox({
       if (!pendingImageFetches.current[key]) {
         const controller = new AbortController()
         pendingImageControllers.current[key] = controller
-        pendingImageFetches.current[key] = fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'original'), controller.signal)
+        pendingImageFetches.current[key] = fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'preview'), controller.signal)
           .then(blobUrl => {
-            if (blobUrl) imageCacheRef.current[key] = blobUrl
+            if (blobUrl && validateImageUrl(blobUrl, controller.signal)) imageCacheRef.current[key] = blobUrl
+            else if (blobUrl) URL.revokeObjectURL(blobUrl)
           })
           .catch(() => undefined)
           .finally(() => {
@@ -138,7 +174,7 @@ export function MemoriesLightbox({
       pendingImageFetches.current[key]
         .then(() => {
           const blobUrl = imageCacheRef.current[key]
-          if (active) {
+          if (active && blobUrl) {
             setLightboxOriginalSrc(blobUrl)
             setLightboxImageLoading(false)
             prefetchNeighbors()
@@ -423,7 +459,7 @@ export function MemoriesLightbox({
         </button>
       )}
 
-      {isMobile && (lightboxInfo || lightboxInfoLoading) && (
+      {(lightboxInfo || lightboxInfoLoading) && (
         <button
           onClick={e => {
             e.stopPropagation()
@@ -453,7 +489,7 @@ export function MemoriesLightbox({
         onClick={e => {
           if (e.target === e.currentTarget) closeLightbox()
         }}
-        style={{ display: 'flex', gap: '0.4233cm', alignItems: 'center', justifyContent: 'center', padding: '0.5292cm', width: '100%', height: '100%' }}
+        style={{ display: 'flex', gap: '0.4233cm', alignItems: 'center' , justifyContent: 'center', padding: '0.5292cm', width: '100%', height: '100%' }}
       >
         {!isMobile && (hasPrev ? (
           <button
@@ -540,7 +576,7 @@ export function MemoriesLightbox({
           <div aria-hidden style={{ width: '1.0583cm', height: '1.0583cm', flexShrink: 0 }} />
         ))}
 
-        {!isMobile && (
+        {!isMobile && showMobileInfo  && (
           <div
             style={{
               width: '6.3500cm',

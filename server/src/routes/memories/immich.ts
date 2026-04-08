@@ -95,6 +95,17 @@ router.get('/assets/:tripId/:assetId/:ownerId/thumbnail', authenticate, async (r
   await streamImmichAsset(res, authReq.user.id, assetId, 'thumbnail', Number(ownerId));
 });
 
+router.get('/assets/:tripId/:assetId/:ownerId/preview', authenticate, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { tripId, assetId, ownerId } = req.params;
+
+  if (!isValidAssetId(assetId)) return res.status(400).json({ error: 'Invalid asset ID' });
+  if (!canAccessUserPhoto(authReq.user.id, Number(ownerId), tripId, assetId, 'immich')) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  await streamImmichAsset(res, authReq.user.id, assetId, 'original', Number(ownerId));
+});
+
 router.get('/assets/:tripId/:assetId/:ownerId/original', authenticate, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { tripId, assetId, ownerId } = req.params;

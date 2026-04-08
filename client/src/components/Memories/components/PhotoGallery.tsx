@@ -1,4 +1,5 @@
 import { User } from "../../../types";
+import type { UIEvent } from 'react'
 
 import { Camera, Plus, X, ArrowUpDown, Link2, RefreshCw, FolderOpen, Check } from 'lucide-react'
 import { PhotoElement } from "./PhotoElement";
@@ -26,10 +27,12 @@ interface PhotoGalleryProps {
   disabledIds?: Set<string>;
   onToggleSelect?: (photo: TripPhoto) => void;
   onToggleSelectGroup?: (groupPhotos: TripPhoto[]) => void;
+  onScroll?: (event: UIEvent<HTMLDivElement>) => void;
+  embeddedScroll?: boolean;
   itemMinSize?: number;
 }
 
-export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, openLightbox, openPicker, setTripPhotos, tripId, groupBy, sortOrder, selectionEnabled, selectedIds, disabledIds, onToggleSelect, onToggleSelectGroup, itemMinSize = 4 }: PhotoGalleryProps) {
+export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, openLightbox, openPicker, setTripPhotos, tripId, groupBy, sortOrder, selectionEnabled, selectedIds, disabledIds, onToggleSelect, onToggleSelectGroup, onScroll, embeddedScroll, itemMinSize = 4 }: PhotoGalleryProps) {
   const { t } = useTranslation()
   const toast = useToast()
     
@@ -126,7 +129,7 @@ export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, o
   }
 
   return <>
-    <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: embeddedScroll ? 'visible' : 'auto', padding: 12 }} onScroll={embeddedScroll ? undefined : onScroll}>
       {allVisible.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '1.5875cm 0.5292cm' }}>
           <Camera size={40} style={{ color: 'var(--text-faint)', margin: '0 auto 0.3175cm', display: 'block' }} />
@@ -179,7 +182,7 @@ export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, o
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${itemMinSize}cm, 1fr))`, gap: 6 }}>
               {grouped[key].map(photo => {
-                const photoKey = `${photo.provider}::${photo.asset_id}`
+                const photoKey = `${photo.user_id}::${photo.provider}::${photo.asset_id}`
                 const selected = selectedIds?.has(photoKey) ?? false
                 const disabled = disabledIds?.has(photoKey) ?? false
                 const selectionMode = Boolean(selectionEnabled && onToggleSelect)

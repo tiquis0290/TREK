@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import type { UIEvent } from 'react'
 import apiClient, { addonsApi } from '../../api/client'
-import { Camera, Plus, X, ArrowUpDown, Link2, RefreshCw, FolderOpen } from 'lucide-react'
+import { Camera } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { useTranslation } from '../../i18n'
 import { clearImageQueue } from '../../api/authUrl'
@@ -13,6 +14,7 @@ import { createMemoriesUrlBuilders } from './urlBuilders'
 import { deriveVisibleMemories } from './selectors'
 import type { PhotoProvider, TripPhoto, MemoriesPanelProps, AlbumLink } from './types'
 import { PhotoGallery } from './components/PhotoGallery'
+import { MemoriesHeader } from './components/MemoriesHeader.tsx'
 import { useState as useReactState } from 'react';
 
 // ── Main Component ──────────────────────────────────────────────────────────
@@ -28,7 +30,10 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [selectedProvider, setSelectedProvider] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [loadingContent, setLoadingContent] = useState(true)
-
+  const [showCompactHeader, setShowCompactHeader] = useState(false)
+  const [isAtTop, setIsAtTop] = useState(true)
+  const headerRef = useRef<HTMLDivElement | null>(null)
+  const lastScrollTop = useRef(0)
   // Trip photos (saved selections)
   const [tripPhotos, setTripPhotos] = useState<TripPhoto[]>([])
 
@@ -91,7 +96,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
   // WebSocket: reload photos when another user adds/removes/shares
   useEffect(() => {
-    const handler = () => loadPhotos()
+    const handler = () => loadContent()
     loadInitial()
     window.addEventListener('memories:updated', handler)
     return () => {
@@ -146,13 +151,13 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       setConnected(false)
     } finally {
       setLoading(false)
+      setLoadingContent(true)
       await loadContent()
     }
   }
 
 
   const loadContent = async () => {
-    setLoadingContent(true)
     await loadPhotos()
     await loadAlbumLinks()
     setLoadingContent(false)
@@ -171,6 +176,29 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     setLightbox(photo)
   }
 
+  const handleScroll = async (event: UIEvent<HTMLDivElement>) => {
+    const scrollTop = event.currentTarget.scrollTop
+    const delta = scrollTop - lastScrollTop.current
+    const minShow = headerRef.current?.offsetHeight * 1.5|| 100
+    let nextShow = showCompactHeader
+    let mindelta = 10
+
+    console.log({ scrollTop, delta, minShow, showCompactHeader, isAtTop })
+    setIsAtTop(scrollTop < 1)
+    if (scrollTop === 0) {
+      nextShow = false
+    } else if (delta < -mindelta && scrollTop > minShow) {
+      nextShow = true
+    } else if (delta > mindelta) {
+      nextShow = false
+    }
+
+    if (nextShow !== showCompactHeader) {
+      await new Promise<void>(resolve => setTimeout(resolve, 1));
+      setShowCompactHeader(nextShow);
+    }
+    lastScrollTop.current = scrollTop
+  }
 
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -268,126 +296,96 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   // ── Main Gallery ──────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', ...font }}>
-
-      {/* Header */}
-      <div style={{ padding: '0.4233cm 0.5292cm', borderBottom: '0.0265cm solid var(--border-secondary)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h2 style={{ margin: '0cm', fontSize: '0.4763cm', fontWeight: 700, color: 'var(--text-primary)' }}>
-              {t('memories.title')}
-            </h2>
-            <p style={{ margin: '0.0529cm 0 0', fontSize: '0.3175cm', color: 'var(--text-faint)' }}>
-              {allVisible.length} {t('memories.photosFound')}
-              {othersPhotos.length > 0 && ` · ${othersPhotos.length} ${t('memories.fromOthers')}`}
-            </p>
-          </div>
-          {connected && (
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={openAlbumPicker}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '0.1323cm', padding: '0.1852cm 0.3704cm', borderRadius: '0.2646cm',
-                  border: '0.0265cm solid var(--border-primary)', background: 'none', color: 'var(--text-muted)',
-                  fontSize: '0.3175cm', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                }}>
-                <Link2 size={13} /> {t('memories.linkAlbum')}
-              </button>
-              <button onClick={openPicker}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '0.1323cm', padding: '0.1852cm 0.3704cm', borderRadius: '0.2646cm',
-                  border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
-                  fontSize: '0.3175cm', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                }}>
-                <Plus size={14} /> {t('memories.addPhotos')}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Linked Albums */}
-        {albumLinks.length > 0 && (
-          <div style={{ padding: '0.2117cm 0.5292cm', display: 'flex', gap: '0.1588cm', flexWrap: 'wrap' }}>
-            {albumLinks.map(link => (
-              <div key={link.id} style={{
-                display: 'flex', alignItems: 'center', gap: '0.1588cm', padding: '0.1058cm 0.2646cm', borderRadius: '0.2117cm',
-                background: 'var(--bg-tertiary)', fontSize: '0.2910cm', color: 'var(--text-muted)',
-              }}>
-                <FolderOpen size={11} />
-                <span style={{ fontWeight: 500 }}>{link.album_name}</span>
-                {link.username !== currentUser?.username && <span style={{ color: 'var(--text-faint)' }}>({link.username})</span>}
-                <button onClick={() => syncAlbum(link.id, link.provider)} disabled={syncing === link.id} title={t('memories.syncAlbum')}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.0529cm', display: 'flex', color: 'var(--text-faint)' }}>
-                  <RefreshCw size={11} style={{ animation: syncing === link.id ? 'spin 1s linear infinite' : 'none' }} />
-                </button>
-                {link.user_id === currentUser?.id && (
-                  <button onClick={() => unlinkAlbum(link.id)} title={t('memories.unlinkAlbum')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.0529cm', display: 'flex', color: 'var(--text-faint)' }}>
-                    <X size={11} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', ...font }}>
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 2,
+        overflow: 'hidden',
+        transition: !isAtTop ? 'opacity 80ms ease, transform 160ms ease' : 'none',
+        transform: !isAtTop ? showCompactHeader ? 'translateY(0)' : 'translateY(-100%)' : 'none',
+        opacity: showCompactHeader ? 1 : 0,
+        pointerEvents: showCompactHeader ? 'auto' : 'none',
+      }}>
+        <MemoriesHeader
+          t={t}
+          connected={connected}
+          openAlbumPicker={openAlbumPicker}
+          openPicker={openPicker}
+          albumLinks={albumLinks}
+          syncing={syncing}
+          syncAlbum={syncAlbum}
+          unlinkAlbum={unlinkAlbum}
+          currentUser={currentUser}
+          allVisibleCount={allVisible.length}
+          othersCount={othersPhotos.length}
+          sortAsc={sortAsc}
+          onSortToggle={() => {
+            setLoadingContent(true)
+            setSortAsc(!sortAsc)
+            setTimeout(() => setLoadingContent(false), 160)
+          }}
+          groupBy={groupBy}
+          onGroupByChange={groupBy => {
+            setLoadingContent(true)
+            setGroupBy(groupBy)
+            setTimeout(() => setLoadingContent(false), 160)
+          }}
+          locationFilter={locationFilter}
+          onLocationFilterChange={value => {
+            console.log('Location filter change', value)
+            setLoadingContent(true)
+            setLocationFilter(value)
+            setTimeout(() => setLoadingContent(false), 160)
+          }}
+          locations={locations}
+        />
       </div>
 
-      {/* Filter & Sort bar */}
-      {allVisibleRaw.length > 0 && (
-        <div style={{ display: 'flex', gap: '0.1588cm', padding: '0.2117cm 0.5292cm', borderBottom: '0.0265cm solid var(--border-secondary)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={async () => {
-            setLoadingContent(true);
-            setSortAsc(!sortAsc);
-            await new Promise<void>(resolve => setTimeout(resolve, 5));
-            setLoadingContent(false);
-          }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '0.1058cm', padding: '0.1058cm 0.2646cm', borderRadius: '0.2117cm',
-              border: '0.0265cm solid var(--border-primary)', background: 'var(--bg-card)',
-              fontSize: '0.2910cm', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)',
-            }}>
-            <ArrowUpDown size={11} /> {sortAsc ? t('memories.oldest') : t('memories.newest')}
-          </button>
-          <select value={groupBy} onChange={async (e) => {
-            setLoadingContent(true);
-            setGroupBy(e.target.value as 'day' | 'week' | 'month');
-            await new Promise<void>(resolve => setTimeout(resolve, 5));
-            setLoadingContent(false);
-          }}
-            style={{
-              padding: '0.1058cm 0.2646cm', borderRadius: '0.2117cm', border: '0.0265cm solid var(--border-primary)',
-              background: 'var(--bg-card)', fontSize: '0.2910cm', fontFamily: 'inherit', color: 'var(--text-muted)',
-              cursor: 'pointer', outline: 'none',
-            }}>
-            <option value="day">{t('memories.day') || 'Day'}</option>
-            <option value="week">{t('memories.week') || 'Week'}</option>
-            <option value="month">{t('memories.month') || 'Month'}</option>
-          </select>
-          {locations.length > 1 && (
-            <select value={locationFilter} onChange={async (e) => {
-              setLoadingContent(true);
-              setLocationFilter(e.target.value);
-              await new Promise<void>(resolve => setTimeout(resolve, 5));
-              setLoadingContent(false);
+      <div style={{ flex: 1, overflowY: 'auto'}} onScroll={handleScroll}>
+        <div ref={headerRef}>
+          <MemoriesHeader
+            t={t}
+            connected={connected}
+            openAlbumPicker={openAlbumPicker}
+            openPicker={openPicker}
+            albumLinks={albumLinks}
+            syncing={syncing}
+            syncAlbum={syncAlbum}
+            unlinkAlbum={unlinkAlbum}
+            currentUser={currentUser}
+            allVisibleCount={allVisible.length}
+            othersCount={othersPhotos.length}
+            sortAsc={sortAsc}
+            onSortToggle={() => {
+              setLoadingContent(true)
+              setSortAsc(!sortAsc)
+              setTimeout(() => setLoadingContent(false), 16)
             }}
-              style={{
-                padding: '0.1058cm 0.2646cm', borderRadius: '0.2117cm', border: '0.0265cm solid var(--border-primary)',
-                background: 'var(--bg-card)', fontSize: '0.2910cm', fontFamily: 'inherit', color: 'var(--text-muted)',
-                cursor: 'pointer', outline: 'none',
-              }}>
-              <option value="">{t('memories.allLocations')}</option>
-              {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-            </select>
-          )}
+            groupBy={groupBy}
+            onGroupByChange={groupBy => {
+              setLoadingContent(true)
+              setGroupBy(groupBy)
+              setTimeout(() => setLoadingContent(false), 16)
+            }}
+            locationFilter={locationFilter}
+            onLocationFilterChange={value => {
+              setLoadingContent(true)
+              setLocationFilter(value)
+              setTimeout(() => setLoadingContent(false), 16)
+            }}
+            locations={locations}
+          />
         </div>
-      )}
 
-      {loadingContent ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-          <div className="w-8 h-8 border-2 rounded-full animate-spin"
-            style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }} />
-        </div>
-      ) : (
-        <>
+        {loadingContent ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <div className="w-8 h-8 border-2 rounded-full animate-spin"
+              style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }} />
+          </div>
+        ) : (
           <PhotoGallery
             allVisible={allVisible}
             currentUser={currentUser}
@@ -398,16 +396,17 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
             tripId={tripId}
             groupBy={groupBy}
             sortOrder={sortAsc ? 'oldest' : 'newest'}
+            embeddedScroll
           />
+        )}
+      </div>
 
-          <MemoriesLightbox
-            allVisible={allVisible}
-            tripId={tripId}
-            initialPhoto={lightboxPhoto}
-            onClose={() => setLightbox(null)}
-          />
-        </>
-      )}
+      <MemoriesLightbox
+        allVisible={allVisible}
+        tripId={tripId}
+        initialPhoto={lightboxPhoto}
+        onClose={() => setLightbox(null)}
+      />
     </div>
   )
 }

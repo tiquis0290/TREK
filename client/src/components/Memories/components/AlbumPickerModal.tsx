@@ -97,9 +97,9 @@ export function AlbumPickerModal({
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-secondary)' }}>
+            <div style={{ padding: '0.3704cm 0.5292cm', borderBottom: '0.0265cm solid var(--border-secondary)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    <h3 style={{ margin: '0cm', fontSize: '0.3969cm', fontWeight: 700, color: 'var(--text-primary)' }}>
                         {availableProviders.length > 1
                             ? t('memories.selectAlbumMultiple')
                             : t('memories.selectAlbum', {
@@ -109,11 +109,11 @@ export function AlbumPickerModal({
                     <button
                         onClick={onClose}
                         style={{
-                            padding: '7px 14px',
-                            borderRadius: 10,
-                            border: '1px solid var(--border-primary)',
+                            padding: '0.1852cm 0.3704cm',
+                            borderRadius: '0.2646cm',
+                            border: '0.0265cm solid var(--border-primary)',
                             background: 'none',
-                            fontSize: 12,
+                            fontSize: '0.3175cm',
                             cursor: 'pointer',
                             fontFamily: 'inherit',
                             color: 'var(--text-muted)',
@@ -134,9 +134,9 @@ export function AlbumPickerModal({
                     <div style={{ textAlign: 'center', padding: 40 }}>
                         <div
                             style={{
-                                width: 24,
-                                height: 24,
-                                border: '2px solid var(--border-primary)',
+                                width: '0.6350cm',
+                                height: '0.6350cm',
+                                border: '0.0529cm solid var(--border-primary)',
                                 borderTopColor: 'var(--text-primary)',
                                 borderRadius: '50%',
                                 animation: 'spin 0.8s linear infinite',
@@ -145,7 +145,7 @@ export function AlbumPickerModal({
                         />
                     </div>
                 ) : albums.length === 0 ? (
-                    <p style={{ textAlign: 'center', padding: 40, fontSize: 13, color: 'var(--text-faint)' }}>
+                    <p style={{ textAlign: 'center', padding: '1.0583cm', fontSize: '0.3440cm', color: 'var(--text-faint)' }}>
                         {t('memories.noAlbums')}
                     </p>
                 ) : (
@@ -160,10 +160,10 @@ export function AlbumPickerModal({
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: 12,
+                                        gap: '0.3175cm',
                                         width: '100%',
-                                        padding: '12px 14px',
-                                        borderRadius: 10,
+                                        padding: '0.3175cm 0.3704cm',
+                                        borderRadius: '0.2646cm',
                                         border: 'none',
                                         cursor: isLinked ? 'default' : 'pointer',
                                         background: isLinked ? 'var(--bg-tertiary)' : 'transparent',
@@ -180,8 +180,8 @@ export function AlbumPickerModal({
                                 >
                                     <FolderOpen size={20} color="var(--text-muted)" />
                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{album.albumName}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>
+                                        <div style={{ fontSize: '0.3440cm', fontWeight: 600, color: 'var(--text-primary)' }}>{album.albumName}</div>
+                                        <div style={{ fontSize: '0.2910cm', color: 'var(--text-faint)', marginTop: 1 }}>
                                             {album.assetCount} {t('memories.photos')}
                                         </div>
                                     </div>

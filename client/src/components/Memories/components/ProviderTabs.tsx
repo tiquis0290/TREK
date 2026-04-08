@@ -10,19 +10,19 @@ export function ProviderTabs({ availableProviders, selectedProvider, onSelectPro
   if (availableProviders.length < 2) return null
 
   return (
-    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+    <div style={{ display: 'flex', gap: '0.1588cm', marginTop: 8 }}>
       {availableProviders.map(provider => (
         <button
           key={provider.id}
           onClick={() => onSelectProvider(provider.id)}
           style={{
-            padding: '6px 12px',
-            borderRadius: 99,
-            fontSize: 12,
+            padding: '0.1588cm 0.3175cm',
+            borderRadius: '2.6194cm',
+            fontSize: '0.3175cm',
             fontWeight: 600,
             cursor: 'pointer',
             fontFamily: 'inherit',
-            border: '1px solid',
+            border: '0.0265cm solid',
             transition: 'all 0.15s',
             background: selectedProvider === provider.id ? 'var(--text-primary)' : 'var(--bg-card)',
             borderColor: selectedProvider === provider.id ? 'var(--text-primary)' : 'var(--border-primary)',

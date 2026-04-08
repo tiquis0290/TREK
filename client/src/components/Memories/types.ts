@@ -16,6 +16,7 @@ export interface TripPhoto extends PhotoMetadata {
   asset_id: string
   user_id: number
   username: string
+  avatar?: string | null
   shared: number
   added_at: string
 }

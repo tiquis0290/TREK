@@ -1,6 +1,6 @@
 import { User } from "../../../types";
 
-import { Camera, Plus, X, ArrowUpDown, Link2, RefreshCw, FolderOpen } from 'lucide-react'
+import { Camera, Plus, X, ArrowUpDown, Link2, RefreshCw, FolderOpen, Check } from 'lucide-react'
 import { PhotoElement } from "./PhotoElement";
 import { TripPhoto } from "../types";
 import apiClient from "../../../api/client";
@@ -25,9 +25,11 @@ interface PhotoGalleryProps {
   selectedIds?: Set<string>;
   disabledIds?: Set<string>;
   onToggleSelect?: (photo: TripPhoto) => void;
+  onToggleSelectGroup?: (groupPhotos: TripPhoto[]) => void;
+  itemMinSize?: number;
 }
 
-export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, openLightbox, openPicker, setTripPhotos, tripId, groupBy, sortOrder, selectionEnabled, selectedIds, disabledIds, onToggleSelect }: PhotoGalleryProps) {
+export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, openLightbox, openPicker, setTripPhotos, tripId, groupBy, sortOrder, selectionEnabled, selectedIds, disabledIds, onToggleSelect, onToggleSelectGroup, itemMinSize = 4 }: PhotoGalleryProps) {
   const { t } = useTranslation()
   const toast = useToast()
     
@@ -126,16 +128,16 @@ export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, o
   return <>
     <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
       {allVisible.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <Camera size={40} style={{ color: 'var(--text-faint)', margin: '0 auto 12px', display: 'block' }} />
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 12px' }}>
+        <div style={{ textAlign: 'center', padding: '1.5875cm 0.5292cm' }}>
+          <Camera size={40} style={{ color: 'var(--text-faint)', margin: '0 auto 0.3175cm', display: 'block' }} />
+          <p style={{ fontSize: '0.3704cm', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 0.3175cm' }}>
             {t('memories.noPhotos')}
           </p>
           <button onClick={openPicker}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '9px 18px', borderRadius: 10,
+              display: 'inline-flex', alignItems: 'center', gap: '0.1323cm', padding: '0.2381cm 0.4763cm', borderRadius: '0.2646cm',
               border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: '0.3440cm', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
             }}>
             <Plus size={15} /> {t('memories.addPhotos')}
           </button>
@@ -143,10 +145,39 @@ export function PhotoGallery({ allVisible, currentUser, buildProviderAssetUrl, o
       ) : (
         groupKeys.map(key => (
           <div key={key} style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, paddingLeft: 2 }}>
-                {key}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.1588cm', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2117cm', fontSize: '0.3704cm', fontWeight: 700, color: 'var(--text-muted)', paddingLeft: '0.0529cm', lineHeight: 1 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>{key}</span>
+            {selectionEnabled && onToggleSelectGroup && (() => {
+              const sectionKeys = grouped[key].map(photo => `${photo.provider}::${photo.asset_id}`)
+              const selectableKeys = sectionKeys.filter(id => !disabledIds?.has(id))
+              const selectedCount = selectableKeys.filter(id => selectedIds?.has(id)).length
+              const allSelected = selectableKeys.length > 0 && selectedCount === selectableKeys.length
+              return (
+                <button
+                  onClick={() => onToggleSelectGroup(grouped[key])}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '0.5292cm',
+                    height: '0.5292cm',
+                    borderRadius: '50%',
+                    border: '0.0265cm solid var(--text-muted)',
+                    background: allSelected ? 'var(--text-muted)' : 'var(--bg-card)',
+                    color: allSelected ? 'var(--bg-card)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                  }}
+                  aria-label={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
+                  title={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
+                >
+                  {allSelected && <Check size={12} />}
+                </button>
+              )
+            })()}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${itemMinSize}cm, 1fr))`, gap: 6 }}>
               {grouped[key].map(photo => {
                 const photoKey = `${photo.provider}::${photo.asset_id}`
                 const selected = selectedIds?.has(photoKey) ?? false

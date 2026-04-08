@@ -49,12 +49,12 @@ export function PhotoElement({
       style={{
         position: 'relative',
         aspectRatio: '1',
-        borderRadius: 8,
-        overflow: 'hidden',
+        borderRadius: '0.2117cm',
+        overflow: 'visible',
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.3 : 1,
-        outline: selectable && selected ? '3px solid var(--text-primary)' : 'none',
-        outlineOffset: selectable && selected ? -3 : undefined,
+        outline: selectable && selected ? '0.0794cm solid var(--text-muted)' : 'none',
+        outlineOffset: selectable && selected ? '-0.0794cm' : undefined,
       }}
       onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
@@ -63,36 +63,21 @@ export function PhotoElement({
       <ProviderImg
         baseUrl={buildProviderAssetUrl(photo, 'thumbnail')}
         loading="lazy"
-        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10 }}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '0.2646cm' }}
       />
 
-      {selectable && hovered && !selected && !disabled && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0,0,0,0.28)',
-            color: 'white',
-            zIndex: 5,
-          }}
-        >
-          <Plus size={20} />
-        </div>
-      )}
+
       {selectable && selected && (
         <>
           <div
             style={{
               position: 'absolute',
-              top: 8,
-              right: 8,
-              width: 24,
-              height: 24,
+              top: '0.2117cm',
+              right: '0.2117cm',
+              width: '0.635cm',
+              height: '0.635cm',
               borderRadius: '50%',
-              background: 'var(--text-primary)',
+              background: 'var(--text-muted)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -101,22 +86,7 @@ export function PhotoElement({
           >
             <Check size={14} color="var(--bg-primary)" />
           </div>
-          {hovered && !disabled && (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'rgba(0,0,0,0.28)',
-                color: 'white',
-                zIndex: 5,
-              }}
-            >
-              <Minus size={20} />
-            </div>
-          )}
+
         </>
       )}
       {selectable && disabled && (
@@ -129,7 +99,7 @@ export function PhotoElement({
             justifyContent: 'center',
             background: 'rgba(0,0,0,0.36)',
             color: 'white',
-            fontSize: 10,
+            fontSize: '0.2646cm',
             fontWeight: 600,
             zIndex: 5,
           }}
@@ -139,25 +109,26 @@ export function PhotoElement({
       )}
 
       {!selectable && !isOwn && (
-        <div className="memories-avatar" style={{ position: 'absolute', bottom: 6, left: 6, zIndex: 10 }}>
-          <div
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: '50%',
-              background: `hsl(${usernameInitial.charCodeAt(0) * 37 % 360}, 55%, 55%)`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 10,
-              fontWeight: 700,
-              color: 'white',
-              textTransform: 'uppercase',
-              border: '2px solid white',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
-            }}
-          >
-            {usernameInitial}
+        <div className="memories-avatar" style={{ position: 'absolute', bottom: '0.1587cm', left: '0.1587cm', zIndex: 10 }}>
+          <div style={{
+            width: '0.635cm',
+            height: '0.635cm',
+            borderRadius: '50%',
+            background: `hsl(${usernameInitial.charCodeAt(0) * 37 % 360}, 55%, 55%)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '0.2646cm',
+            fontWeight: 700,
+            color: 'white',
+            textTransform: 'uppercase',
+            border: '0.0529cm solid white',
+            boxShadow: '0 0.0265cm 0.1058cm rgba(0,0,0,0.3)',
+          }}>{
+              photo.avatar ? (
+                <img src={`/uploads/avatars/${photo.avatar}`} alt="" style={{width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (photo.username || '?')[0].toUpperCase()
+            }
           </div>
           <div
             className="memories-avatar-tooltip"
@@ -166,12 +137,12 @@ export function PhotoElement({
               bottom: '100%',
               left: '50%',
               transform: 'translateX(-50%)',
-              marginBottom: 6,
-              padding: '3px 8px',
-              borderRadius: 6,
+              marginBottom: '0.1587cm',
+              padding: '0.0794cm 0.2117cm',
+              borderRadius: '0.1587cm',
               background: 'var(--text-primary)',
               color: 'var(--bg-primary)',
-              fontSize: 10,
+              fontSize: '0.2646cm',
               fontWeight: 600,
               whiteSpace: 'nowrap',
               pointerEvents: 'none',
@@ -187,7 +158,7 @@ export function PhotoElement({
       {isOwn && !selectable && (
         <div
           className="opacity-0 group-hover:opacity-100"
-          style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 3, transition: 'opacity 0.15s' }}
+          style={{ position: 'absolute', top: '0.1058cm', right: '0.1058cm', display: 'flex', gap: '0.0794cm', transition: 'opacity 0.15s' }}
         >
           <button
             onClick={e => {
@@ -196,13 +167,13 @@ export function PhotoElement({
             }}
             title={photo.shared ? t('memories.stopSharing') : t('memories.sharePhotos')}
             style={{
-              width: 26,
-              height: 26,
+              width: '0.6885cm',
+              height: '0.6885cm',
               borderRadius: '50%',
               border: 'none',
               cursor: 'pointer',
               background: 'rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(4px)',
+              backdropFilter: 'blur(0.1058cm)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -216,13 +187,13 @@ export function PhotoElement({
               onRemovePhoto(photo)
             }}
             style={{
-              width: 26,
-              height: 26,
+              width: '0.6885cm',
+              height: '0.6885cm',
               borderRadius: '50%',
               border: 'none',
               cursor: 'pointer',
               background: 'rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(4px)',
+              backdropFilter: 'blur(0.1058cm)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -237,18 +208,18 @@ export function PhotoElement({
         <div
           style={{
             position: 'absolute',
-            bottom: 6,
-            right: 6,
-            padding: '2px 6px',
-            borderRadius: 6,
+            bottom: '0.1587cm',
+            right: '0.1587cm',
+            padding: '0.0529cm 0.1587cm',
+            borderRadius: '0.1587cm',
             background: 'rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(4px)',
-            fontSize: 9,
+            backdropFilter: 'blur(0.1058cm)',
+            fontSize: '0.2381cm',
             color: 'rgba(255,255,255,0.7)',
             fontWeight: 500,
           }}
         >
-          <EyeOff size={9} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 3 }} />
+          <EyeOff size={9} style={{ display: 'inline', verticalAlign: '-0.0265cm', marginRight: '0.0794cm' }} />
           {t('memories.private')}
         </div>
       )}

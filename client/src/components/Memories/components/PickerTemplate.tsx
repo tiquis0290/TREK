@@ -31,18 +31,18 @@ export function PickerTemplate({
 }: PickerTemplateProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-secondary)' }}>
+      <div style={{ padding: '0.3704cm 0.5292cm', borderBottom: '0.0265cm solid var(--border-secondary)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</h3>
+          <h3 style={{ margin: '0cm', fontSize: '0.3969cm', fontWeight: 700, color: 'var(--text-primary)' }}>{title}</h3>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               onClick={onClose}
               style={{
-                padding: '7px 14px',
-                borderRadius: 10,
-                border: '1px solid var(--border-primary)',
+                padding: '0.1852cm 0.3704cm',
+                borderRadius: '0.2646cm',
+                border: '0.0265cm solid var(--border-primary)',
                 background: 'none',
-                fontSize: 12,
+                fontSize: '0.3175cm',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 color: 'var(--text-muted)',

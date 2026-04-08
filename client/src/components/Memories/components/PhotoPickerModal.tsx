@@ -183,13 +183,13 @@ export function PhotoPickerModal({
             }
           }}
           style={{
-            padding: '6px 14px',
-            borderRadius: 99,
-            fontSize: 12,
+            padding: '0.1588cm 0.3704cm',
+            borderRadius: '2.6194cm',
+            fontSize: '0.3175cm',
             fontWeight: 600,
             cursor: 'pointer',
             fontFamily: 'inherit',
-            border: '1px solid',
+            border: '0.0265cm solid',
             transition: 'all 0.15s',
             background: pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
             borderColor: pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
@@ -205,13 +205,13 @@ export function PhotoPickerModal({
             }
           }}
           style={{
-            padding: '6px 14px',
-            borderRadius: 99,
-            fontSize: 12,
+            padding: '0.1588cm 0.3704cm',
+            borderRadius: '2.6194cm',
+            fontSize: '0.3175cm',
             fontWeight: 600,
             cursor: 'pointer',
             fontFamily: 'inherit',
-            border: '1px solid',
+            border: '0.0265cm solid',
             transition: 'all 0.15s',
             background: !pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
             borderColor: !pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
@@ -223,7 +223,7 @@ export function PhotoPickerModal({
       </div>
 
       {selectedIds.size > 0 && (
-        <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+        <p style={{ margin: '0.2117cm 0 0', fontSize: '0.3175cm', fontWeight: 600, color: 'var(--text-primary)' }}>
           {selectedIds.size} {t('memories.selected')}
         </p>
       )}
@@ -300,10 +300,10 @@ export function PhotoPickerModal({
       onClick={confirmSelection}
       disabled={selectedIds.size === 0}
       style={{
-        padding: '7px 14px',
-        borderRadius: 10,
+        padding: '0.1852cm 0.3704cm',
+        borderRadius: '0.2646cm',
         border: 'none',
-        fontSize: 12,
+        fontSize: '0.3175cm',
         fontWeight: 600,
         cursor: selectedIds.size > 0 ? 'pointer' : 'default',
         fontFamily: 'inherit',
@@ -340,11 +340,11 @@ export function PhotoPickerModal({
             />
           </div>
         ) : pickerPhotos.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <Camera size={36} style={{ color: 'var(--text-faint)', margin: '0 auto 10px', display: 'block' }} />
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{t('memories.noPhotos')}</p>
+          <div style={{ textAlign: 'center', padding: '1.5875cm 0.5292cm' }}>
+            <Camera size={36} style={{ color: 'var(--text-faint)', margin: '0 auto 0.2646cm', display: 'block' }} />
+            <p style={{ fontSize: '0.3440cm', color: 'var(--text-muted)', margin: 0 }}>{t('memories.noPhotos')}</p>
             {pickerDateFilter && (
-              <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: '0 0 16px' }}>
+              <p style={{ fontSize: '0.3175cm', color: 'var(--text-faint)', margin: '0 0 0.4233cm' }}>
                 {t('memories.noPhotosHint', {
                   provider_name: availableProviders.find(p => p.id === selectedProvider)?.name || 'Photo provider',
                 })}
@@ -367,6 +367,7 @@ export function PhotoPickerModal({
               selectedIds={selectedIds}
               disabledIds={alreadyAdded}
               onToggleSelect={(photo) => onTogglePickerSelect(makePickerKey(photo.provider, photo.asset_id))}
+              itemMinSize={3}
             />
             {pickerLoadingMore && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>

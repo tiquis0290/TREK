@@ -201,12 +201,12 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
   if (!connected && allVisible.length === 0) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 40, textAlign: 'center', ...font }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '1.0583cm', textAlign: 'center', ...font }}>
         <Camera size={40} style={{ color: 'var(--text-faint)', marginBottom: 12 }} />
-        <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+        <h3 style={{ margin: '0 0 0.1588cm', fontSize: '0.4233cm', fontWeight: 700, color: 'var(--text-primary)' }}>
           {t('memories.notConnected', { provider_name: enabledProviders.length === 1 ? enabledProviders[0]?.name : 'Photo provider' })}
         </h3>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 300 }}>
+        <p style={{ margin: '0cm', fontSize: '0.3440cm', color: 'var(--text-muted)', maxWidth: 300 }}>
           {enabledProviders.length === 1 ? t('memories.notConnectedHint', { provider_name: enabledProviders[0]?.name }) : t('memories.notConnectedMultipleHint', { provider_names: enabledProviders.map(p => p.name).join(', ') })}
         </p>
       </div>
@@ -271,13 +271,13 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', ...font }}>
 
       {/* Header */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', flexShrink: 0 }}>
+      <div style={{ padding: '0.4233cm 0.5292cm', borderBottom: '0.0265cm solid var(--border-secondary)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+            <h2 style={{ margin: '0cm', fontSize: '0.4763cm', fontWeight: 700, color: 'var(--text-primary)' }}>
               {t('memories.title')}
             </h2>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>
+            <p style={{ margin: '0.0529cm 0 0', fontSize: '0.3175cm', color: 'var(--text-faint)' }}>
               {allVisible.length} {t('memories.photosFound')}
               {othersPhotos.length > 0 && ` · ${othersPhotos.length} ${t('memories.fromOthers')}`}
             </p>
@@ -286,17 +286,17 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
             <div style={{ display: 'flex', gap: 6 }}>
               <button onClick={openAlbumPicker}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10,
-                  border: '1px solid var(--border-primary)', background: 'none', color: 'var(--text-muted)',
-                  fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: '0.1323cm', padding: '0.1852cm 0.3704cm', borderRadius: '0.2646cm',
+                  border: '0.0265cm solid var(--border-primary)', background: 'none', color: 'var(--text-muted)',
+                  fontSize: '0.3175cm', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                 }}>
                 <Link2 size={13} /> {t('memories.linkAlbum')}
               </button>
               <button onClick={openPicker}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10,
+                  display: 'flex', alignItems: 'center', gap: '0.1323cm', padding: '0.1852cm 0.3704cm', borderRadius: '0.2646cm',
                   border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
-                  fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: '0.3175cm', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
                 }}>
                 <Plus size={14} /> {t('memories.addPhotos')}
               </button>
@@ -306,22 +306,22 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
         {/* Linked Albums */}
         {albumLinks.length > 0 && (
-          <div style={{ padding: '8px 20px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ padding: '0.2117cm 0.5292cm', display: 'flex', gap: '0.1588cm', flexWrap: 'wrap' }}>
             {albumLinks.map(link => (
               <div key={link.id} style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8,
-                background: 'var(--bg-tertiary)', fontSize: 11, color: 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', gap: '0.1588cm', padding: '0.1058cm 0.2646cm', borderRadius: '0.2117cm',
+                background: 'var(--bg-tertiary)', fontSize: '0.2910cm', color: 'var(--text-muted)',
               }}>
                 <FolderOpen size={11} />
                 <span style={{ fontWeight: 500 }}>{link.album_name}</span>
                 {link.username !== currentUser?.username && <span style={{ color: 'var(--text-faint)' }}>({link.username})</span>}
                 <button onClick={() => syncAlbum(link.id, link.provider)} disabled={syncing === link.id} title={t('memories.syncAlbum')}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', color: 'var(--text-faint)' }}>
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.0529cm', display: 'flex', color: 'var(--text-faint)' }}>
                   <RefreshCw size={11} style={{ animation: syncing === link.id ? 'spin 1s linear infinite' : 'none' }} />
                 </button>
                 {link.user_id === currentUser?.id && (
                   <button onClick={() => unlinkAlbum(link.id)} title={t('memories.unlinkAlbum')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', color: 'var(--text-faint)' }}>
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.0529cm', display: 'flex', color: 'var(--text-faint)' }}>
                     <X size={11} />
                   </button>
                 )}
@@ -333,7 +333,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
       {/* Filter & Sort bar */}
       {allVisibleRaw.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, padding: '8px 20px', borderBottom: '1px solid var(--border-secondary)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.1588cm', padding: '0.2117cm 0.5292cm', borderBottom: '0.0265cm solid var(--border-secondary)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={async () => {
             setLoadingContent(true);
             setSortAsc(!sortAsc);
@@ -341,9 +341,9 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
             setLoadingContent(false);
           }}
             style={{
-              display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 8,
-              border: '1px solid var(--border-primary)', background: 'var(--bg-card)',
-              fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)',
+              display: 'flex', alignItems: 'center', gap: '0.1058cm', padding: '0.1058cm 0.2646cm', borderRadius: '0.2117cm',
+              border: '0.0265cm solid var(--border-primary)', background: 'var(--bg-card)',
+              fontSize: '0.2910cm', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)',
             }}>
             <ArrowUpDown size={11} /> {sortAsc ? t('memories.oldest') : t('memories.newest')}
           </button>
@@ -354,8 +354,8 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
             setLoadingContent(false);
           }}
             style={{
-              padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border-primary)',
-              background: 'var(--bg-card)', fontSize: 11, fontFamily: 'inherit', color: 'var(--text-muted)',
+              padding: '0.1058cm 0.2646cm', borderRadius: '0.2117cm', border: '0.0265cm solid var(--border-primary)',
+              background: 'var(--bg-card)', fontSize: '0.2910cm', fontFamily: 'inherit', color: 'var(--text-muted)',
               cursor: 'pointer', outline: 'none',
             }}>
             <option value="day">{t('memories.day') || 'Day'}</option>
@@ -370,8 +370,8 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
               setLoadingContent(false);
             }}
               style={{
-                padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border-primary)',
-                background: 'var(--bg-card)', fontSize: 11, fontFamily: 'inherit', color: 'var(--text-muted)',
+                padding: '0.1058cm 0.2646cm', borderRadius: '0.2117cm', border: '0.0265cm solid var(--border-primary)',
+                background: 'var(--bg-card)', fontSize: '0.2910cm', fontFamily: 'inherit', color: 'var(--text-muted)',
                 cursor: 'pointer', outline: 'none',
               }}>
               <option value="">{t('memories.allLocations')}</option>

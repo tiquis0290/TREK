@@ -114,20 +114,20 @@ export function MemoriesLightbox({
         <div>
           <div
             style={{
-              fontSize: 9,
+              fontSize: '0.2381cm',
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               color: 'rgba(255,255,255,0.4)',
-              marginBottom: 3,
+              marginBottom: '0.0794cm',
             }}
           >
             Date
           </div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>
+          <div style={{ fontSize: '0.3440cm', fontWeight: 600 }}>
             {new Date(lightboxInfo.takenAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+          <div style={{ fontSize: '0.2910cm', color: 'rgba(255,255,255,0.5)' }}>
             {new Date(lightboxInfo.takenAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
@@ -136,74 +136,74 @@ export function MemoriesLightbox({
         <div>
           <div
             style={{
-              fontSize: 9,
+              fontSize: '0.2381cm',
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               color: 'rgba(255,255,255,0.4)',
-              marginBottom: 3,
+              marginBottom: '0.0794cm',
             }}
           >
-            <MapPin size={9} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 3 }} />
+            <MapPin size={9} style={{ display: 'inline', verticalAlign: '-0.0265cm', marginRight: 3 }} />
             Location
           </div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{[lightboxInfo.city, lightboxInfo.state, lightboxInfo.country].filter(Boolean).join(', ')}</div>
+          <div style={{ fontSize: '0.3440cm', fontWeight: 600 }}>{[lightboxInfo.city, lightboxInfo.state, lightboxInfo.country].filter(Boolean).join(', ')}</div>
         </div>
       )}
       {lightboxInfo.camera && (
         <div>
           <div
             style={{
-              fontSize: 9,
+              fontSize: '0.2381cm',
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               color: 'rgba(255,255,255,0.4)',
-              marginBottom: 3,
+              marginBottom: '0.0794cm',
             }}
           >
             Camera
           </div>
-          <div style={{ fontSize: 12, fontWeight: 500 }}>{lightboxInfo.camera}</div>
-          {lightboxInfo.lens && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{lightboxInfo.lens}</div>}
+          <div style={{ fontSize: '0.3175cm', fontWeight: 500 }}>{lightboxInfo.camera}</div>
+          {lightboxInfo.lens && <div style={{ fontSize: '0.2910cm', color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{lightboxInfo.lens}</div>}
         </div>
       )}
       {(lightboxInfo.focalLength || lightboxInfo.aperture || lightboxInfo.iso) && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {lightboxInfo.focalLength && (
             <div>
-              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Focal</div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{lightboxInfo.focalLength}</div>
+              <div style={{ fontSize: '0.2381cm', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Focal</div>
+              <div style={{ fontSize: '0.3440cm', fontWeight: 700 }}>{lightboxInfo.focalLength}</div>
             </div>
           )}
           {lightboxInfo.aperture && (
             <div>
-              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Aperture</div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{lightboxInfo.aperture}</div>
+              <div style={{ fontSize: '0.2381cm', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Aperture</div>
+              <div style={{ fontSize: '0.3440cm', fontWeight: 700 }}>{lightboxInfo.aperture}</div>
             </div>
           )}
           {lightboxInfo.shutter && (
             <div>
-              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shutter</div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{lightboxInfo.shutter}</div>
+              <div style={{ fontSize: '0.2381cm', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shutter</div>
+              <div style={{ fontSize: '0.3440cm', fontWeight: 700 }}>{lightboxInfo.shutter}</div>
             </div>
           )}
           {lightboxInfo.iso && (
             <div>
-              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ISO</div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{lightboxInfo.iso}</div>
+              <div style={{ fontSize: '0.2381cm', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ISO</div>
+              <div style={{ fontSize: '0.3440cm', fontWeight: 700 }}>{lightboxInfo.iso}</div>
             </div>
           )}
         </div>
       )}
       {(lightboxInfo.width || lightboxInfo.fileName) && (
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10 }}>
+        <div style={{ borderTop: '0.0265cm solid rgba(255,255,255,0.08)', paddingTop: 10 }}>
           {lightboxInfo.width && lightboxInfo.height && (
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 3 }}>
+            <div style={{ fontSize: '0.2910cm', color: 'rgba(255,255,255,0.4)', marginBottom: 3 }}>
               {lightboxInfo.width} x {lightboxInfo.height}
             </div>
           )}
-          {lightboxInfo.fileSize && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{(lightboxInfo.fileSize / 1024 / 1024).toFixed(1)} MB</div>}
+          {lightboxInfo.fileSize && <div style={{ fontSize: '0.2910cm', color: 'rgba(255,255,255,0.4)' }}>{(lightboxInfo.fileSize / 1024 / 1024).toFixed(1)} MB</div>}
         </div>
       )}
     </>
@@ -244,11 +244,11 @@ export function MemoriesLightbox({
         onClick={closeLightbox}
         style={{
           position: 'absolute',
-          top: 16,
-          right: 16,
+          top: '0.4233cm',
+          right: '0.4233cm',
           zIndex: 10,
-          width: 40,
-          height: 40,
+          width: '1.0583cm',
+          height: '1.0583cm',
           borderRadius: '50%',
           background: 'rgba(255,255,255,0.1)',
           border: 'none',
@@ -262,7 +262,7 @@ export function MemoriesLightbox({
       </button>
 
       {allVisible.length > 1 && (
-        <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 10, fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+        <div style={{ position: 'absolute', top: '0.5292cm', left: '0.5292cm', zIndex: 10, fontSize: '0.3175cm', color: 'rgba(255,255,255,0.5)' }}>
           {currentIdx + 1} / {allVisible.length}
         </div>
       )}
@@ -275,15 +275,15 @@ export function MemoriesLightbox({
           }}
           style={{
             position: 'absolute',
-            left: 12,
+            left: '0.3175cm',
             top: '50%',
             transform: 'translateY(-50%)',
             zIndex: 10,
             background: 'rgba(0,0,0,0.5)',
             border: 'none',
             borderRadius: '50%',
-            width: 40,
-            height: 40,
+            width: '1.0583cm',
+            height: '1.0583cm',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -310,8 +310,8 @@ export function MemoriesLightbox({
             background: 'rgba(0,0,0,0.5)',
             border: 'none',
             borderRadius: '50%',
-            width: 40,
-            height: 40,
+            width: '1.0583cm',
+            height: '1.0583cm',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -331,11 +331,11 @@ export function MemoriesLightbox({
           }}
           style={{
             position: 'absolute',
-            top: 16,
-            right: 68,
+            top: '0.4233cm',
+            right: '1.7992cm',
             zIndex: 10,
-            width: 40,
-            height: 40,
+            width: '1.0583cm',
+            height: '1.0583cm',
             borderRadius: '50%',
             background: showMobileInfo ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
             border: 'none',
@@ -353,7 +353,7 @@ export function MemoriesLightbox({
         onClick={e => {
           if (e.target === e.currentTarget) closeLightbox()
         }}
-        style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'center', padding: 20, width: '100%', height: '100%' }}
+        style={{ display: 'flex', gap: '0.4233cm', alignItems: 'center', justifyContent: 'center', padding: '0.5292cm', width: '100%', height: '100%' }}
       >
         {!isMobile && (hasPrev ? (
           <button
@@ -366,8 +366,8 @@ export function MemoriesLightbox({
               background: 'rgba(0,0,0,0.5)',
               border: 'none',
               borderRadius: '50%',
-              width: 40,
-              height: 40,
+              width: '1.0583cm',
+              height: '1.0583cm',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -379,14 +379,14 @@ export function MemoriesLightbox({
             <ChevronLeft size={22} />
           </button>
         ) : (
-          <div aria-hidden style={{ width: 40, height: 40, flexShrink: 0 }} />
+          <div aria-hidden style={{ width: '1.0583cm', height: '1.0583cm', flexShrink: 0 }} />
         ))}
 
         <div
           onClick={e => e.stopPropagation()}
           style={{
             flex: 1,
-            minWidth: 0,
+            minWidth: '0cm',
             height: '100%',
             display: 'flex',
             alignItems: 'center',
@@ -406,7 +406,7 @@ export function MemoriesLightbox({
                 maxWidth: '100%',
                 maxHeight: '100%',
                 objectFit: 'contain',
-                borderRadius: 10,
+                borderRadius: '0.2646cm',
                 cursor: 'default',
               }}
             />
@@ -424,8 +424,8 @@ export function MemoriesLightbox({
               background: 'rgba(0,0,0,0.5)',
               border: 'none',
               borderRadius: '50%',
-              width: 40,
-              height: 40,
+              width: '1.0583cm',
+              height: '1.0583cm',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -437,24 +437,24 @@ export function MemoriesLightbox({
             <ChevronRight size={22} />
           </button>
         ) : (
-          <div aria-hidden style={{ width: 40, height: 40, flexShrink: 0 }} />
+          <div aria-hidden style={{ width: '1.0583cm', height: '1.0583cm', flexShrink: 0 }} />
         ))}
 
         {!isMobile && (
           <div
             style={{
-              width: 240,
+              width: '6.3500cm',
               flexShrink: 0,
-              borderRadius: 16,
-              padding: 18,
+              borderRadius: '0.4233cm',
+              padding: '0.4763cm',
               background: 'rgba(255,255,255,0.08)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255,255,255,0.12)',
+              backdropFilter: 'blur(0.5292cm)',
+              WebkitBackdropFilter: 'blur(0.5292cm)',
+              border: '0.0265cm solid rgba(255,255,255,0.12)',
               color: 'white',
               display: 'flex',
               flexDirection: 'column',
-              gap: 14,
+              gap: '0.3704cm',
               maxHeight: '100%',
               overflowY: 'auto',
             }}
@@ -475,23 +475,23 @@ export function MemoriesLightbox({
           onClick={e => e.stopPropagation()}
           style={{
             position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: '0cm',
+            left: '0cm',
+            right: '0cm',
             zIndex: 5,
             maxHeight: '60vh',
             overflowY: 'auto',
-            borderRadius: '16px 16px 0 0',
-            padding: 18,
+            borderRadius: '0.4233cm 0.4233cm 0 0',
+            padding: '0.4763cm',
             background: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.12)',
+            backdropFilter: 'blur(0.5292cm)',
+            WebkitBackdropFilter: 'blur(0.5292cm)',
+            border: '0.0265cm solid rgba(255,255,255,0.12)',
             borderBottom: 'none',
             color: 'white',
             display: 'flex',
             flexDirection: 'column',
-            gap: 14,
+            gap: '0.3704cm',
           }}
         >
           {exifContent}

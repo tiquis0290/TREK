@@ -30,10 +30,6 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [selectedProvider, setSelectedProvider] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [loadingContent, setLoadingContent] = useState(true)
-  const [showCompactHeader, setShowCompactHeader] = useState(false)
-  const [isAtTop, setIsAtTop] = useState(true)
-  const headerRef = useRef<HTMLDivElement | null>(null)
-  const lastScrollTop = useRef(0)
   // Trip photos (saved selections)
   const [tripPhotos, setTripPhotos] = useState<TripPhoto[]>([])
 
@@ -176,33 +172,10 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     setLightbox(photo)
   }
 
-  const handleScroll = async (event: UIEvent<HTMLDivElement>) => {
-    const scrollTop = event.currentTarget.scrollTop
-    const delta = scrollTop - lastScrollTop.current
-    const minShow = headerRef.current?.offsetHeight * 1.5|| 100
-    let nextShow = showCompactHeader
-    let mindelta = 10
-
-    setIsAtTop(scrollTop < 1)
-    if (scrollTop === 0) {
-      nextShow = false
-    } else if (delta < -mindelta && scrollTop > minShow) {
-      nextShow = true
-    } else if (delta > mindelta) {
-      nextShow = false
-    }
-
-    if (nextShow !== showCompactHeader) {
-      await new Promise<void>(resolve => setTimeout(resolve, 1));
-      setShowCompactHeader(nextShow);
-    }
-    lastScrollTop.current = scrollTop
-  }
-
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  const { othersPhotos, allVisibleRaw, allVisible, locations } = deriveVisibleMemories({
+  const { othersPhotos, allVisible, locations } = deriveVisibleMemories({
     tripPhotos,
     currentUserId: currentUser?.id,
     locationFilter,
@@ -296,20 +269,16 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
   return (
     <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', ...font }}>
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 15,
-        overflow: 'hidden',
-        transition: !isAtTop ? 'opacity 80ms ease, transform 160ms ease' : 'none',
-        transform: !isAtTop ? showCompactHeader ? 'translateY(0)' : 'translateY(-100%)' : 'none',
-        opacity: showCompactHeader ? 1 : 0,
-        pointerEvents: showCompactHeader ? 'auto' : 'none',
-      }}>
-        <MemoriesHeader
-          t={t}
+      <PhotoGallery
+        allVisible={allVisible}
+        currentUser={currentUser}
+
+        buildProviderAssetUrl={buildProviderAssetUrl}
+        openLightbox={openLightbox}
+        openPicker={openPicker}
+        setTripPhotos={setTripPhotos}
+        tripId={tripId}
+        header={<MemoriesHeader
           connected={connected}
           openAlbumPicker={openAlbumPicker}
           openPicker={openPicker}
@@ -324,82 +293,26 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
           onSortToggle={() => {
             setLoadingContent(true)
             setSortAsc(!sortAsc)
-            setTimeout(() => setLoadingContent(false), 160)
+            setTimeout(() => setLoadingContent(false), 16)
           }}
           groupBy={groupBy}
           onGroupByChange={groupBy => {
             setLoadingContent(true)
             setGroupBy(groupBy)
-            setTimeout(() => setLoadingContent(false), 160)
+            setTimeout(() => setLoadingContent(false), 16)
           }}
           locationFilter={locationFilter}
           onLocationFilterChange={value => {
-            console.log('Location filter change', value)
             setLoadingContent(true)
             setLocationFilter(value)
-            setTimeout(() => setLoadingContent(false), 160)
+            setTimeout(() => setLoadingContent(false), 16)
           }}
           locations={locations}
-        />
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto'}} onScroll={handleScroll}>
-        <div ref={headerRef}>
-          <MemoriesHeader
-            t={t}
-            connected={connected}
-            openAlbumPicker={openAlbumPicker}
-            openPicker={openPicker}
-            albumLinks={albumLinks}
-            syncing={syncing}
-            syncAlbum={syncAlbum}
-            unlinkAlbum={unlinkAlbum}
-            currentUser={currentUser}
-            allVisibleCount={allVisible.length}
-            othersCount={othersPhotos.length}
-            sortAsc={sortAsc}
-            onSortToggle={() => {
-              setLoadingContent(true)
-              setSortAsc(!sortAsc)
-              setTimeout(() => setLoadingContent(false), 16)
-            }}
-            groupBy={groupBy}
-            onGroupByChange={groupBy => {
-              setLoadingContent(true)
-              setGroupBy(groupBy)
-              setTimeout(() => setLoadingContent(false), 16)
-            }}
-            locationFilter={locationFilter}
-            onLocationFilterChange={value => {
-              setLoadingContent(true)
-              setLocationFilter(value)
-              setTimeout(() => setLoadingContent(false), 16)
-            }}
-            locations={locations}
-          />
-        </div>
-
-        {loadingContent ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-            <div className="w-8 h-8 border-2 rounded-full animate-spin"
-              style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }} />
-          </div>
-        ) : (
-          <PhotoGallery
-            allVisible={allVisible}
-            currentUser={currentUser}
-            buildProviderAssetUrl={buildProviderAssetUrl}
-            openLightbox={openLightbox}
-            openPicker={openPicker}
-            setTripPhotos={setTripPhotos}
-            tripId={tripId}
-            groupBy={groupBy}
-            sortOrder={sortAsc ? 'oldest' : 'newest'}
-            embeddedScroll
-          />
-        )}
-      </div>
-
+        />}
+        loadingContent={loadingContent}
+        groupBy={groupBy}
+        sortOrder={sortAsc ? 'oldest' : 'newest'}
+      />
       <MemoriesLightbox
         allVisible={allVisible}
         tripId={tripId}

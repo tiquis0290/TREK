@@ -3,7 +3,6 @@ import { useTranslation } from '../../../i18n'
 import type { AlbumLink } from '../types'
 
 type MemoriesHeaderProps = {
-  t: ReturnType<typeof useTranslation>['t']
   connected: boolean
   openAlbumPicker: () => void
   openPicker: () => void
@@ -25,7 +24,6 @@ type MemoriesHeaderProps = {
 }
 
 export function MemoriesHeader({
-  t,
   connected,
   openAlbumPicker,
   openPicker,
@@ -45,6 +43,7 @@ export function MemoriesHeader({
   locations,
   compact = false,
 }: MemoriesHeaderProps) {
+  const { t } = useTranslation()
   return (
     <div style={{
       display: 'flex',

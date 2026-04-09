@@ -109,7 +109,7 @@ export function PhotoElement({
       )}
 
       {!selectable && !isOwn && (
-        <div className="memories-avatar" style={{ position: 'absolute', bottom: '0.1587cm', left: '0.1587cm', zIndex: 10 }}>
+        <div className="memories-avatar" style={{ position: 'absolute', bottom: '0.1587cm', left: '0.1587cm', zIndex: 7 }}>
           <div style={{
             width: '0.635cm',
             height: '0.635cm',
@@ -152,7 +152,9 @@ export function PhotoElement({
           >
             {photo.username}
           </div>
+          <style>{'.memories-avatar:hover .memories-avatar-tooltip { opacity: 1 !important; }'}</style>
         </div>
+        
       )}
 
       {isOwn && !selectable && (

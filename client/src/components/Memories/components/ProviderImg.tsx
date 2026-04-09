@@ -96,7 +96,7 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
       }
     }
 
-    if (loading === 'eager') {
+    if (loading === 'eager' || true) {
       loadImage()
     } else {
       const element = wrapperRef.current

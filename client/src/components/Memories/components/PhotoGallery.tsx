@@ -7,6 +7,7 @@ import { buildUnifiedMemoriesUrl } from "../urlBuilders";
 import { useTranslation } from "../../../i18n";
 import apiClient from "../../../api/client";
 import useToast from "../../shared/Toast";
+import { PhotoSection } from "./PhotoSection";
 
 interface PhotoGalleryProps {
   allVisible: TripPhoto[];
@@ -176,8 +177,9 @@ export function PhotoGallery(p: PhotoGalleryProps) {
     groupKeys.sort((a, b) => new Date(a.split(' ')[0]).getTime() - new Date(b.split(' ')[0]).getTime());
   }
 
+  let ref = useRef<HTMLDivElement | null>(null)
   return <>
-    <div style={{ overflowY: 'auto', height: '100%' }} onScroll={handleScroll} ref={p.scrollRef}>
+    <div style={{ overflowY: 'auto', height: '100%' }} onScroll={handleScroll} ref={ref}>
       <div ref={headerRef}
         style={{
           position: 'sticky',
@@ -220,62 +222,21 @@ export function PhotoGallery(p: PhotoGalleryProps) {
         </div>
       ) : (<>
         {groupKeys.map(key => (
-          <div key={key} style={{ padding: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', fontSize: '21px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-muted)', paddingLeft: '5px', lineHeight: 1 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1, padding: '6px' }}>{key}</span>
-              {p.onToggleSelectGroup && (() => {
-                const sectionKeys = grouped[key].map(photo => photo.key)
-                const selectableKeys = sectionKeys.filter(id => !p.disabledIds?.has(id))
-                if (selectableKeys.length === 0) return null
-                const selectedCount = selectableKeys.filter(id => p.selectedIds?.has(id)).length
-                const allSelected = selectedCount === selectableKeys.length
-                return (
-                  <button
-                    onClick={() => p.onToggleSelectGroup(selectableKeys, allSelected)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '20px',
-                      height: '20px',
-                      marginTop: '2px',
-                      borderRadius: '50%',
-                      border: '3px solid var(--text-muted)',
-                      background: allSelected ? 'var(--text-muted)' : 'var(--bg-card)',
-                      color: allSelected ? 'var(--bg-card)' : 'var(--text-muted)',
-                      cursor: 'pointer',
-                    }}
-                    aria-label={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
-                    title={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
-                  >
-                    {allSelected && <Check size={12} />}
-                  </button>
-                )
-              })()}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${((p.itemMinSize ?? 4) * 37.795).toFixed(2)}px, 1fr))`, gap: 6 }}>
-              {grouped[key].map(photo => {
-                const photoKey = photo.key
-                const selected = p.selectedIds?.has(photoKey) ?? false
-                const disabled = p.disabledIds?.has(photoKey) ?? false
-                return (
-                  <PhotoElement
-                    key={photoKey}
-                    keyId={photoKey}
-                    photo={photo}
-                    tripId={p.tripId}
-                    currentUserId={p.currentUser?.id}
-                    onOpenLightbox={p.openLightbox}
-                    onToggleSharing={toggleSharing}
-                    onRemovePhoto={removePhoto}
-                    selected={selected}
-                    disabled={disabled}
-                    onSelect={p.onToggleSelect}
-                  />
-                )
-              })}
-            </div>
-          </div>
+          <PhotoSection
+            key={key}
+            sectionKey={key}
+            photos={grouped[key]}
+            disabledIds={p.disabledIds}
+            selectedIds={p.selectedIds}
+            onToggleSelect={p.onToggleSelect}
+            onToggleSelectGroup={p.onToggleSelectGroup}
+            tripId={p.tripId}
+            currentUser={p.currentUser}
+            openLightbox={p.openLightbox}
+            itemMinSize={p.itemMinSize}
+            onToggleSharing={toggleSharing}
+            onRemovePhoto={removePhoto}
+          />
         ))}
         {p.loadingMore && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>

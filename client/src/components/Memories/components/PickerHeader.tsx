@@ -1,42 +1,33 @@
 import type { ReactNode } from 'react'
 import { ProviderTabs } from './ProviderTabs'
 import type { PhotoProvider } from '../types'
+import { useTranslation } from '../../../i18n'
 
 interface PickerTemplateProps {
   title: string
-  cancelLabel: string
   availableProviders: PhotoProvider[]
   selectedProvider: string
   onSelectProvider: (providerId: string) => void
   onClose: () => void
   primaryAction?: ReactNode
   controls?: ReactNode
-  children: ReactNode
-  scrollRef?: React.RefObject<HTMLDivElement>
-  onScroll?: () => void
 }
 
-export function PickerTemplate({
-  title,
-  cancelLabel,
-  availableProviders,
-  selectedProvider,
-  onSelectProvider,
-  onClose,
-  primaryAction,
-  controls,
-  children,
-  scrollRef,
-  onScroll,
-}: PickerTemplateProps) {
+export function PickerHeader(p: PickerTemplateProps) {
+  const { t } = useTranslation()
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      background: 'var(--bg-primary)'
+    }}>
       <div style={{ padding: '0.3704cm 0.5292cm', borderBottom: '0.0265cm solid var(--border-secondary)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <h3 style={{ margin: '0cm', fontSize: '0.3969cm', fontWeight: 700, color: 'var(--text-primary)' }}>{title}</h3>
+          <h3 style={{ margin: '0cm', fontSize: '0.3969cm', fontWeight: 700, color: 'var(--text-primary)' }}>{p.title}</h3>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
-              onClick={onClose}
+              onClick={p.onClose}
               style={{
                 padding: '0.1852cm 0.3704cm',
                 borderRadius: '0.2646cm',
@@ -48,25 +39,21 @@ export function PickerTemplate({
                 color: 'var(--text-muted)',
               }}
             >
-              {cancelLabel}
+              {t('common.cancel')}
             </button>
-            {primaryAction}
+            {p.primaryAction}
           </div>
         </div>
 
-        <div style={{ marginBottom: controls ? 10 : 0 }}>
+        <div style={{ marginBottom: p.controls ? 10 : 0 }}>
           <ProviderTabs
-            availableProviders={availableProviders}
-            selectedProvider={selectedProvider}
-            onSelectProvider={onSelectProvider}
+            availableProviders={p.availableProviders}
+            selectedProvider={p.selectedProvider}
+            onSelectProvider={p.onSelectProvider}
           />
         </div>
 
-        {controls}
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }} ref={scrollRef} onScroll={onScroll}>
-        {children}
+        {p.controls}
       </div>
     </div>
   )

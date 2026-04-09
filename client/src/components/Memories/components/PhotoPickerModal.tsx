@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import apiClient from '../../../api/client'
-import { Camera, Check } from 'lucide-react'
+import { Camera } from 'lucide-react'
 import { clearImageQueue } from '../../../api/authUrl'
 import { useTranslation } from '../../../i18n'
 import { useToast } from '../../shared/Toast'
-import { ProviderImg } from './ProviderImg'
 import { PhotoGallery } from './PhotoGallery'
 import { ConfirmShareModal } from './ConfirmShareModal'
-import { PickerTemplate } from './PickerTemplate'
-import { buildProviderAssetMemoriesUrl, buildProviderMemoriesUrl, createMemoriesUrlBuilders } from '../urlBuilders'
+import { PickerHeader } from './PickerHeader'
+import { buildProviderMemoriesUrl, buildUnifiedMemoriesUrl } from '../urlBuilders'
 import type { Asset, PhotoProvider, TripPhoto } from '../types'
+import { isLoading } from '../../../services/photoService'
 
 interface PhotoPickerModalProps {
   availableProviders: PhotoProvider[]
@@ -26,20 +26,7 @@ interface PhotoPickerModalProps {
   onClose: () => void
 }
 
-export function PhotoPickerModal({
-  availableProviders,
-  selectedProvider,
-  onSelectProvider,
-  startDate,
-  endDate,
-  pickerDateFilter,
-  onSetPickerDateFilter,
-  tripPhotos,
-  currentUserId,
-  tripId,
-  onAdded,
-  onClose,
-}: PhotoPickerModalProps) {
+export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const PAGE_SIZE = 1000
   const { t } = useTranslation()
   const toast = useToast()
@@ -50,13 +37,12 @@ export function PhotoPickerModal({
   const [pickerPhotos, setPickerPhotos] = useState<Asset[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showConfirmShare, setShowConfirmShare] = useState(false)
-  const { buildUnifiedUrl } = createMemoriesUrlBuilders(tripId)
 
   useEffect(() => {
     let active = true
 
     const loadPickerPhotos = async (offset: number, append: boolean) => {
-      if (!selectedProvider) {
+      if (!p.selectedProvider) {
         if (active) {
           setPickerPhotos([])
           setPickerHasMore(false)
@@ -71,15 +57,15 @@ export function PhotoPickerModal({
       else setPickerLoading(true)
 
       try {
-        const res = await apiClient.post(buildProviderMemoriesUrl(tripId, selectedProvider, 'search'), {
-          from: pickerDateFilter && startDate ? startDate : undefined,
-          to: pickerDateFilter && endDate ? endDate : undefined,
+        const res = await apiClient.post(buildProviderMemoriesUrl(p.tripId, p.selectedProvider, 'search'), {
+          from: p.pickerDateFilter && p.startDate ? p.startDate : undefined,
+          to: p.pickerDateFilter && p.endDate ? p.endDate : undefined,
           offset,
           limit: PAGE_SIZE,
         })
 
         if (active) {
-          const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: selectedProvider }))
+          const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: p.selectedProvider }))
           setPickerPhotos(prev => append ? [...prev, ...incoming] : incoming)
           setPickerOffset(offset + incoming.length)
           setPickerHasMore(Boolean(res.data.hasMore) && incoming.length > 0)
@@ -106,21 +92,21 @@ export function PhotoPickerModal({
     return () => {
       active = false
     }
-  }, [selectedProvider, pickerDateFilter, startDate, endDate, tripId, PAGE_SIZE])
+  }, [p.selectedProvider, p.pickerDateFilter, p.startDate, p.endDate, p.tripId, PAGE_SIZE])
 
   const loadMorePickerPhotos = async () => {
-    if (!selectedProvider || pickerLoading || pickerLoadingMore || !pickerHasMore) return
+    if (!p.selectedProvider || pickerLoading || pickerLoadingMore || !pickerHasMore) return
 
     setPickerLoadingMore(true)
     try {
-      const res = await apiClient.post(buildProviderMemoriesUrl(tripId, selectedProvider, 'search'), {
-        from: pickerDateFilter && startDate ? startDate : undefined,
-        to: pickerDateFilter && endDate ? endDate : undefined,
+      const res = await apiClient.post(buildProviderMemoriesUrl(p.tripId, p.selectedProvider, 'search'), {
+        from: p.pickerDateFilter && p.startDate ? p.startDate : undefined,
+        to: p.pickerDateFilter && p.endDate ? p.endDate : undefined,
         offset: pickerOffset,
         limit: PAGE_SIZE,
       })
 
-      const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: selectedProvider }))
+      const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: p.selectedProvider }))
       setPickerPhotos(prev => [...prev, ...incoming])
       setPickerOffset(prev => prev + incoming.length)
       setPickerHasMore(Boolean(res.data.hasMore) && incoming.length > 0)
@@ -164,22 +150,19 @@ export function PhotoPickerModal({
   }
 
 
-
-  // Infinite scroll handled by useInfiniteScroll hook and scrollRef
-
-  const title = availableProviders.length > 1
+  const title = p.availableProviders.length > 1
     ? t('memories.selectPhotosMultiple')
     : t('memories.selectPhotos', {
-      provider_name: availableProviders.find(p => p.id === selectedProvider)?.name || 'Photo provider',
+      provider_name: p.availableProviders.find(pr => pr.id === p.selectedProvider)?.name || 'Photo provider',
     })
 
-  const controls = startDate && endDate && (
+  const controls = p.startDate && p.endDate && (
     <>
       <div style={{ display: 'flex', gap: 6 }}>
         <button
           onClick={() => {
-            if (!pickerDateFilter) {
-              onSetPickerDateFilter(true)
+            if (!p.pickerDateFilter) {
+              p.onSetPickerDateFilter(true)
             }
           }}
           style={{
@@ -191,17 +174,17 @@ export function PhotoPickerModal({
             fontFamily: 'inherit',
             border: '0.0265cm solid',
             transition: 'all 0.15s',
-            background: pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
-            borderColor: pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
-            color: pickerDateFilter ? 'var(--bg-primary)' : 'var(--text-muted)',
+            background: p.pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
+            borderColor: p.pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
+            color: p.pickerDateFilter ? 'var(--bg-primary)' : 'var(--text-muted)',
           }}
         >
-          {t('memories.tripDates')} ({startDate ? new Date(startDate + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ''} - {endDate ? new Date(endDate + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : ''})
+          {t('memories.tripDates')} ({p.startDate ? new Date(p.startDate + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ''} - {p.endDate ? new Date(p.endDate + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : ''})
         </button>
         <button
           onClick={() => {
-            if (pickerDateFilter) {
-              onSetPickerDateFilter(false)
+            if (p.pickerDateFilter) {
+              p.onSetPickerDateFilter(false)
             }
           }}
           style={{
@@ -213,9 +196,9 @@ export function PhotoPickerModal({
             fontFamily: 'inherit',
             border: '0.0265cm solid',
             transition: 'all 0.15s',
-            background: !pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
-            borderColor: !pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
-            color: !pickerDateFilter ? 'var(--bg-primary)' : 'var(--text-muted)',
+            background: !p.pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
+            borderColor: !p.pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
+            color: !p.pickerDateFilter ? 'var(--bg-primary)' : 'var(--text-muted)',
           }}
         >
           {t('memories.allPhotos')}
@@ -234,9 +217,9 @@ export function PhotoPickerModal({
   const makePickerKey = (provider: string, assetId: string): string => `${provider}::${assetId}`
 
   const alreadyAdded = new Set(
-    tripPhotos
-      .filter(p => p.user_id === currentUserId)
-      .map(p => makePickerKey(p.provider, p.asset_id))
+    p.tripPhotos
+      .filter(tp => tp.user_id === p.currentUserId)
+      .map(tp => makePickerKey(tp.provider, tp.asset_id))
   )
 
   const onTogglePickerSelect = (id: string) => {
@@ -251,7 +234,7 @@ export function PhotoPickerModal({
   const buildPickerPhoto = (asset: Asset): TripPhoto => ({
     provider: asset.provider,
     asset_id: asset.id,
-    user_id: currentUserId || 0,
+    user_id: p.currentUserId || 0,
     username: '',
     shared: alreadyAdded.has(makePickerKey(asset.provider, asset.id)) ? 1 : 0,
     added_at: asset.takenAt || new Date().toISOString(),
@@ -284,12 +267,12 @@ export function PhotoPickerModal({
         assets: assets,
       }))
 
-      await apiClient.post(buildUnifiedUrl('photos'), {
+      await apiClient.post(buildUnifiedMemoriesUrl(p.tripId, 'photos'), {
         selections,
         shared: true,
       })
       setSelectedIds(new Set())
-      await onAdded()
+      await p.onAdded()
     } catch {
       toast.error(t('memories.error.addPhotos'))
     }
@@ -315,79 +298,44 @@ export function PhotoPickerModal({
     </button>
   )
 
-  return (
-    <>
-      <PickerTemplate
-        title={title}
-        cancelLabel={t('common.cancel')}
-        availableProviders={availableProviders}
-        selectedProvider={selectedProvider}
-        onSelectProvider={onSelectProvider}
-        onClose={() => {
-          clearImageQueue()
-          onClose()
-        }}
-        primaryAction={primaryAction}
-        controls={controls}
-        scrollRef={scrollRef}
-        onScroll={handleScroll}
-      >
-        {pickerLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
-            <div
-              className="w-7 h-7 border-2 rounded-full animate-spin"
-              style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }}
-            />
-          </div>
-        ) : pickerPhotos.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '1.5875cm 0.5292cm' }}>
-            <Camera size={36} style={{ color: 'var(--text-faint)', margin: '0 auto 0.2646cm', display: 'block' }} />
-            <p style={{ fontSize: '0.3440cm', color: 'var(--text-muted)', margin: 0 }}>{t('memories.noPhotos')}</p>
-            {pickerDateFilter && (
-              <p style={{ fontSize: '0.3175cm', color: 'var(--text-faint)', margin: '0 0 0.4233cm' }}>
-                {t('memories.noPhotosHint', {
-                  provider_name: availableProviders.find(p => p.id === selectedProvider)?.name || 'Photo provider',
-                })}
-              </p>
-            )}
-          </div>
-        ) : (
-          <>
-            <PhotoGallery
-              allVisible={pickerTripPhotos}
-              currentUser={currentUserId ? { id: currentUserId } as any : null}
-              buildProviderAssetUrl={(photo, what) => buildProviderAssetMemoriesUrl(tripId, photo, what)}
-              openLightbox={(_photo: TripPhoto) => {}}
-              openPicker={() => {}}
-              setTripPhotos={(_photos: TripPhoto[]) => {}}
-              tripId={tripId}
-              groupBy="month"
-              sortOrder="newest"
-              selectionEnabled
-              selectedIds={selectedIds}
-              disabledIds={alreadyAdded}
-              onToggleSelect={(photo) => onTogglePickerSelect(makePickerKey(photo.provider, photo.asset_id))}
-              itemMinSize={3}
-            />
-            {pickerLoadingMore && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
-                <div
-                  className="w-7 h-7 border-2 rounded-full animate-spin"
-                  style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }}
-                />
-              </div>
-            )}
-          </>
-        )}
-      </PickerTemplate>
-
-      {showConfirmShare && (
-        <ConfirmShareModal
-          count={selectedIds.size}
-          onCancel={() => setShowConfirmShare(false)}
-          onConfirm={executeAddPhotos}
+  return <>
+    <PhotoGallery
+      allVisible={pickerTripPhotos}
+      currentUser={p.currentUserId ? { id: p.currentUserId } as any : null}
+      openLightbox={(_photo: TripPhoto) => { }}
+      openPicker={() => { }}
+      setTripPhotos={(_photos: TripPhoto[]) => { }}
+      tripId={p.tripId}
+      groupBy="month"
+      sortOrder="newest"
+      selectionEnabled
+      selectedIds={selectedIds}
+      disabledIds={alreadyAdded}
+      onToggleSelect={(photo) => onTogglePickerSelect(makePickerKey(photo.provider, photo.asset_id))}
+      loadingContent={pickerLoading}
+      loadingMore={pickerLoadingMore}
+      itemMinSize={3}
+      header={
+        <PickerHeader
+          title={title}
+          availableProviders={p.availableProviders}
+          selectedProvider={p.selectedProvider}
+          onSelectProvider={p.onSelectProvider}
+          onClose={() => {
+            clearImageQueue()
+            p.onClose()
+          }}
+          primaryAction={primaryAction}
+          controls={controls}
         />
-      )}
-    </>
-  )
+      }
+    />
+    {showConfirmShare && (
+      <ConfirmShareModal
+        count={selectedIds.size}
+        onCancel={() => setShowConfirmShare(false)}
+        onConfirm={executeAddPhotos}
+      />
+    )}
+  </>
 }

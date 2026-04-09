@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
-import type { UIEvent } from 'react'
+import { useState, useEffect } from 'react'
 import apiClient, { addonsApi } from '../../api/client'
 import { Camera } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
@@ -9,13 +8,12 @@ import { useToast } from '../shared/Toast'
 import { AlbumPickerModal } from './components/AlbumPickerModal'
 import { PhotoPickerModal } from './components/PhotoPickerModal'
 import { MemoriesLightbox } from './components/MemoriesLightbox'
-import { PhotoElement } from './components/PhotoElement'
-import { createMemoriesUrlBuilders } from './urlBuilders'
 import { deriveVisibleMemories } from './selectors'
 import type { PhotoProvider, TripPhoto, MemoriesPanelProps, AlbumLink } from './types'
 import { PhotoGallery } from './components/PhotoGallery'
 import { MemoriesHeader } from './components/MemoriesHeader.tsx'
 import { useState as useReactState } from 'react';
+import { buildProviderMemoriesUrl, buildUnifiedMemoriesUrl } from './urlBuilders.ts'
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
@@ -46,69 +44,24 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [showAlbumPicker, setShowAlbumPicker] = useState(false)
   const [albumLinks, setAlbumLinks] = useState<AlbumLink[]>([])
   const [syncing, setSyncing] = useState<number | null>(null)
-  const { buildUnifiedUrl, buildProviderUrl, buildProviderAssetUrl } = createMemoriesUrlBuilders(tripId)
-
-  const loadAlbumLinks = async (): Promise<AlbumLink[]> => {
-    try {
-      const res = await apiClient.get(buildUnifiedUrl('album-links'))
-      const links = res.data.links || []
-      setAlbumLinks(links)
-      return links
-    } catch {
-      setAlbumLinks([])
-      return []
-    }
-  }
-
-  const openAlbumPicker = async () => {
-    clearImageQueue();
-    setShowAlbumPicker(true)
-  }
-
-  const unlinkAlbum = async (linkId: number) => {
-    try {
-      await apiClient.delete(buildUnifiedUrl('album-links', linkId.toString()))
-      await loadAlbumLinks()
-      await loadPhotos()
-    } catch { toast.error(t('memories.error.unlinkAlbum')) }
-  }
-
-  const syncAlbum = async (linkId: number, provider?: string) => {
-    const targetProvider = provider || selectedProvider
-    if (!targetProvider) return
-    setSyncing(linkId)
-    try {
-      await apiClient.post(buildProviderUrl(targetProvider, 'album-link-sync', linkId.toString()))
-      await loadAlbumLinks()
-      await loadPhotos()
-    } catch { toast.error(t('memories.error.syncAlbum')) }
-    finally { setSyncing(null) }
-  }
 
   // Lightbox
   const [lightboxPhoto, setLightbox] = useState<TripPhoto | null>(null)
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
-  // WebSocket: reload photos when another user adds/removes/shares
   useEffect(() => {
-    const handler = () => loadContent()
     loadInitial()
+    // WebSocket: reload photos when another user adds/removes/shares
+    const handler = () => loadContent()
     window.addEventListener('memories:updated', handler)
     return () => {
       window.removeEventListener('memories:updated', handler);
+      // clear pending images
       clearImageQueue();
     }
   }, [tripId])
 
-  const loadPhotos = async () => {
-    try {
-      const photosRes = await apiClient.get(buildUnifiedUrl('photos'))
-      setTripPhotos(photosRes.data.photos || [])
-    } catch {
-      setTripPhotos([])
-    }
-  }
 
   const loadInitial = async () => {
     setLoading(true)
@@ -158,6 +111,50 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     await loadAlbumLinks()
     setLoadingContent(false)
   }
+
+  // Load trip photos 
+
+  const loadPhotos = async () => {
+    try {
+      const photosRes = await apiClient.get(buildUnifiedMemoriesUrl(tripId, 'photos'))
+      setTripPhotos(photosRes.data.photos || [])
+    } catch {
+      setTripPhotos([])
+    }
+  }
+
+  const loadAlbumLinks = async (): Promise<AlbumLink[]> => {
+    try {
+      const res = await apiClient.get(buildUnifiedMemoriesUrl(tripId, 'album-links'))
+      const links = res.data.links || []
+      setAlbumLinks(links)
+      return links
+    } catch {
+      setAlbumLinks([])
+      return []
+    }
+  }
+
+  const syncAlbum = async (linkId: number, provider?: string) => {
+    const targetProvider = provider || selectedProvider
+    if (!targetProvider) return
+    setSyncing(linkId)
+    try {
+      await apiClient.post(buildProviderMemoriesUrl(tripId, targetProvider, 'album-link-sync', linkId.toString()))
+      await loadContent()
+    } catch { toast.error(t('memories.error.syncAlbum')) }
+    finally { setSyncing(null) }
+  }
+
+  const unlinkAlbum = async (linkId: number) => {
+    try {
+      await apiClient.delete(buildUnifiedMemoriesUrl(tripId, 'album-links', linkId.toString()))
+      await loadAlbumLinks()
+      await loadPhotos()
+    } catch { toast.error(t('memories.error.unlinkAlbum')) }
+  }
+
+
   // ── Photo Picker ──────────────────────────────────────────────────────────
 
   const [pickerDateFilter, setPickerDateFilter] = useState(true)
@@ -168,11 +165,12 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     setShowPicker(true)
   }
 
-  const openLightbox = (photo: TripPhoto) => {
-    setLightbox(photo)
+  // ── Album Picker ──────────────────────────────────────────────────────────
+
+  const openAlbumPicker = async () => {
+    clearImageQueue();
+    setShowAlbumPicker(true)
   }
-
-
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   const { othersPhotos, allVisible, locations } = deriveVisibleMemories({
@@ -236,33 +234,29 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   }
 
   if (showPicker) {
-    return (
-      <div style={{ height: '100%', ...font }}>
-        <PhotoPickerModal
-          availableProviders={availableProviders}
-          selectedProvider={selectedProvider}
-          onSelectProvider={setSelectedProvider}
-          startDate={startDate}
-          endDate={endDate}
-          pickerDateFilter={pickerDateFilter}
-          onSetPickerDateFilter={setPickerDateFilter}
-          tripPhotos={tripPhotos}
-          currentUserId={currentUser?.id}
-          tripId={tripId}
-          onAdded={async () => {
-            setShowPicker(false)
-            clearImageQueue()
-            await loadContent()
-          }}
-          onClose={async () => {
-            setLoadingContent(true);
-            setShowPicker(false);
-            await new Promise<void>(resolve => setTimeout(resolve, 5));
-            setLoadingContent(false);
-          }}
-        />
-      </div>
-    )
+    return <PhotoPickerModal
+      availableProviders={availableProviders}
+      selectedProvider={selectedProvider}
+      onSelectProvider={setSelectedProvider}
+      startDate={startDate}
+      endDate={endDate}
+      pickerDateFilter={pickerDateFilter}
+      onSetPickerDateFilter={setPickerDateFilter}
+      tripPhotos={tripPhotos}
+      currentUserId={currentUser?.id}
+      tripId={tripId}
+      onAdded={async () => {
+        setShowPicker(false)
+        clearImageQueue()
+        await loadContent()
+      }}
+      onClose={async () => {
+        setLoadingContent(true);
+        setShowPicker(false);
+        await new Promise<void>(resolve => setTimeout(resolve, 5));
+        setLoadingContent(false);
+      }}
+    />
   }
 
   // ── Main Gallery ──────────────────────────────────────────────────────────
@@ -272,9 +266,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       <PhotoGallery
         allVisible={allVisible}
         currentUser={currentUser}
-
-        buildProviderAssetUrl={buildProviderAssetUrl}
-        openLightbox={openLightbox}
+        openLightbox={setLightbox}
         openPicker={openPicker}
         setTripPhotos={setTripPhotos}
         tripId={tripId}

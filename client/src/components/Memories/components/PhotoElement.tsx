@@ -1,46 +1,34 @@
-import { Eye, EyeOff, X, Check, Plus, Minus } from 'lucide-react'
-import { useState } from 'react'
+import { Eye, EyeOff, X, Check } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { ProviderImg } from './ProviderImg'
 import type { TripPhoto } from '../types'
+import { buildProviderAssetMemoriesUrl } from '../urlBuilders'
 
 interface PhotoElementProps {
   photo: TripPhoto
   currentUserId?: number
-  buildProviderAssetUrl: (photo: TripPhoto, what: string) => string
   onOpenLightbox: (photo: TripPhoto) => void
   onToggleSharing: (photo: TripPhoto, shared: boolean) => void
   onRemovePhoto: (photo: TripPhoto) => void
+  tripId: number
   selectable?: boolean
   selected?: boolean
   disabled?: boolean
   onSelect?: (photo: TripPhoto) => void
 }
 
-export function PhotoElement({
-  photo,
-  currentUserId,
-  buildProviderAssetUrl,
-  onOpenLightbox,
-  onToggleSharing,
-  onRemovePhoto,
-  selectable,
-  selected,
-  disabled,
-  onSelect,
-}: PhotoElementProps) {
+export function PhotoElement(p: PhotoElementProps) {
   const { t } = useTranslation()
-  const [hovered, setHovered] = useState(false)
-  const isOwn = photo.user_id === currentUserId
-  const usernameInitial = (photo.username?.[0] || '?').toUpperCase()
+  const isOwn = p.photo.user_id === p.currentUserId
+  const usernameInitial = (p.photo.username?.[0] || '?').toUpperCase()
 
   const handleClick = () => {
-    if (selectable) {
-      if (!disabled && onSelect) onSelect(photo)
+    if (p.selectable) {
+      if (!p.disabled && p.onSelect) p.onSelect(p.photo)
       return
     }
 
-    onOpenLightbox(photo)
+    p.onOpenLightbox(p.photo)
   }
 
   return (
@@ -51,23 +39,21 @@ export function PhotoElement({
         aspectRatio: '1',
         borderRadius: '0.2117cm',
         overflow: 'visible',
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.3 : 1,
-        outline: selectable && selected ? '0.0794cm solid var(--text-muted)' : 'none',
-        outlineOffset: selectable && selected ? '-0.0794cm' : undefined,
+        cursor: p.disabled ? 'default' : 'pointer',
+        opacity: p.disabled ? 0.3 : 1,
+        outline: p.selectable && p.selected ? '0.0794cm solid var(--text-muted)' : 'none',
+        outlineOffset: p.selectable && p.selected ? '-0.0794cm' : undefined,
       }}
       onClick={handleClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       <ProviderImg
-        baseUrl={buildProviderAssetUrl(photo, 'thumbnail')}
+        baseUrl={buildProviderAssetMemoriesUrl(p.tripId, p.photo, 'thumbnail')}
         loading="lazy"
         style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '0.2646cm' }}
       />
 
 
-      {selectable && selected && (
+      {p.selectable && p.selected && (
         <>
           <div
             style={{
@@ -89,7 +75,7 @@ export function PhotoElement({
 
         </>
       )}
-      {selectable && disabled && (
+      {p.selectable && p.disabled && (
         <div
           style={{
             position: 'absolute',
@@ -108,7 +94,7 @@ export function PhotoElement({
         </div>
       )}
 
-      {!selectable && !isOwn && (
+      {!p.selectable && !isOwn && (
         <div className="memories-avatar" style={{ position: 'absolute', bottom: '0.1587cm', left: '0.1587cm', zIndex: 7 }}>
           <div style={{
             width: '0.635cm',
@@ -125,9 +111,9 @@ export function PhotoElement({
             border: '0.0529cm solid white',
             boxShadow: '0 0.0265cm 0.1058cm rgba(0,0,0,0.3)',
           }}>{
-              photo.avatar ? (
-                <img src={`/uploads/avatars/${photo.avatar}`} alt="" style={{width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-              ) : (photo.username || '?')[0].toUpperCase()
+              p.photo.avatar ? (
+                <img src={`/uploads/avatars/${p.photo.avatar}`} alt="" style={{width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (p.photo.username || '?')[0].toUpperCase()
             }
           </div>
           <div
@@ -150,14 +136,14 @@ export function PhotoElement({
               transition: 'opacity 0.15s',
             }}
           >
-            {photo.username}
+            {p.photo.username}
           </div>
           <style>{'.memories-avatar:hover .memories-avatar-tooltip { opacity: 1 !important; }'}</style>
         </div>
         
       )}
 
-      {isOwn && !selectable && (
+      {isOwn && !p.selectable && (
         <div
           className="opacity-0 group-hover:opacity-100"
           style={{ position: 'absolute', top: '0.1058cm', right: '0.1058cm', display: 'flex', gap: '0.0794cm', transition: 'opacity 0.15s' }}
@@ -165,9 +151,9 @@ export function PhotoElement({
           <button
             onClick={e => {
               e.stopPropagation()
-              onToggleSharing(photo, !photo.shared)
+              p.onToggleSharing(p.photo, !p.photo.shared)
             }}
-            title={photo.shared ? t('memories.stopSharing') : t('memories.sharePhotos')}
+            title={p.photo.shared ? t('memories.stopSharing') : t('memories.sharePhotos')}
             style={{
               width: '0.6885cm',
               height: '0.6885cm',
@@ -181,12 +167,12 @@ export function PhotoElement({
               justifyContent: 'center',
             }}
           >
-            {photo.shared ? <Eye size={12} color="white" /> : <EyeOff size={12} color="white" />}
+            {p.photo.shared ? <Eye size={12} color="white" /> : <EyeOff size={12} color="white" />}
           </button>
           <button
             onClick={e => {
               e.stopPropagation()
-              onRemovePhoto(photo)
+              p.onRemovePhoto(p.photo)
             }}
             style={{
               width: '0.6885cm',
@@ -206,7 +192,7 @@ export function PhotoElement({
         </div>
       )}
 
-      {isOwn && !selectable && !photo.shared && (
+      {isOwn && !p.selectable && !p.photo.shared && (
         <div
           style={{
             position: 'absolute',

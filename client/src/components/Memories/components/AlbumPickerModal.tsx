@@ -4,7 +4,7 @@ import { Check, FolderOpen, Link2 } from 'lucide-react'
 import { useToast } from '../../shared/Toast'
 import { useTranslation } from '../../../i18n'
 import { ProviderTabs } from './ProviderTabs'
-import { createMemoriesUrlBuilders } from '../urlBuilders'
+import { buildProviderMemoriesUrl, buildUnifiedMemoriesUrl } from '../urlBuilders'
 import type { Album, AlbumLink, PhotoProvider } from '../types'
 
 interface AlbumPickerModalProps {
@@ -32,7 +32,6 @@ export function AlbumPickerModal({
     const toast = useToast()
     const [albumsLoading, setAlbumsLoading] = useState(false)
     const [albums, setAlbums] = useState<Album[]>([])
-    const { buildUnifiedUrl, buildProviderUrl } = createMemoriesUrlBuilders(tripId)
 
     useEffect(() => {
         let active = true
@@ -45,7 +44,7 @@ export function AlbumPickerModal({
 
             setAlbumsLoading(true)
             try {
-                const res = await apiClient.get(buildProviderUrl(selectedProvider, 'albums'))
+                const res = await apiClient.get(buildProviderMemoriesUrl(tripId, selectedProvider, 'albums'))
                 if (active) {
                     setAlbums(res.data.albums || [])
                 }
@@ -74,7 +73,7 @@ export function AlbumPickerModal({
         }
 
         try {
-            await apiClient.post(buildUnifiedUrl('album-links'), {
+            await apiClient.post(buildUnifiedMemoriesUrl(tripId, 'album-links'), {
                 album_id: albumId,
                 album_name: albumName,
                 provider: selectedProvider,

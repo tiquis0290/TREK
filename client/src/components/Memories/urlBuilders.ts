@@ -17,11 +17,3 @@ export function buildProviderMemoriesUrl(tripId: number, provider: string, endpo
 export function buildProviderAssetMemoriesUrl(tripId: number, photo: TripPhoto, what: string): string {
   return `${MEMORIES_ADDON_PREFIX}/${photo.provider}/assets/${tripId}/${photo.asset_id}/${photo.user_id}/${what}`
 }
-
-export function createMemoriesUrlBuilders(tripId: number) {
-  return {
-    buildUnifiedUrl: (endpoint: string, lastParam?: string) => buildUnifiedMemoriesUrl(tripId, endpoint, lastParam),
-    buildProviderUrl: (provider: string, endpoint: string, item?: string) => buildProviderMemoriesUrl(tripId, provider, endpoint, item),
-    buildProviderAssetUrl: (photo: TripPhoto, what: string) => buildProviderAssetMemoriesUrl(tripId, photo, what),
-  }
-}

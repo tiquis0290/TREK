@@ -1,21 +1,16 @@
 import { User } from "../../../types";
 import { useRef, useState, type UIEvent } from 'react'
-
-import { Camera, Plus, X, ArrowUpDown, Link2, RefreshCw, FolderOpen, Check } from 'lucide-react'
+import { Camera, Plus, Check } from 'lucide-react'
 import { PhotoElement } from "./PhotoElement";
 import { TripPhoto } from "../types";
-import apiClient from "../../../api/client";
 import { buildUnifiedMemoriesUrl } from "../urlBuilders";
 import { useTranslation } from "../../../i18n";
+import apiClient from "../../../api/client";
 import useToast from "../../shared/Toast";
-
-
-
 
 interface PhotoGalleryProps {
   allVisible: TripPhoto[];
   currentUser: User | null;
-  buildProviderAssetUrl: (photo: TripPhoto, what: string) => string;
   openLightbox: (photo: TripPhoto) => void;
   openPicker: () => void;
   setTripPhotos: React.Dispatch<React.SetStateAction<TripPhoto[]>>;
@@ -29,16 +24,19 @@ interface PhotoGalleryProps {
   onToggleSelectGroup?: (groupPhotos: TripPhoto[]) => void;
   header?: React.ReactNode;
   loadingContent?: boolean;
+  loadingMore?: boolean;
   itemMinSize?: number;
+  scrollRef?: React.RefObject<HTMLDivElement>;
+  onscroll?: (event: UIEvent<HTMLDivElement>) => void;
+  canAddPhotos?: boolean;
 }
 
 export function PhotoGallery(p: PhotoGalleryProps) {
   const { t } = useTranslation()
   const toast = useToast()
 
-  const [showCompactHeader, setShowCompactHeader] = useState(false)
-  const [isAtTop, setIsAtTop] = useState(true)
-  const headerRef = useRef<HTMLDivElement | null>(null)
+  const [showHeader, setShowHeader] = useState(true)
+  const headerRef = useRef<HTMLDivElement | null>(p.scrollRef?.current || null)
   const lastScrollTop = useRef(0)
 
   // ── Remove photo ──────────────────────────────────────────────────────────
@@ -76,23 +74,24 @@ export function PhotoGallery(p: PhotoGalleryProps) {
     const scrollTop = event.currentTarget.scrollTop
     const delta = scrollTop - lastScrollTop.current
     const minShow = headerRef.current?.offsetHeight * 1.1 || 100
-    let nextShow = showCompactHeader
+    let nextShow = showHeader
     let mindelta = 1
 
     if (scrollTop < minShow) {
       nextShow = true
-    } 
+    }
     if (delta < -mindelta) {
       nextShow = true
     } else if (delta > mindelta) {
       nextShow = false
     }
 
-    if (nextShow !== showCompactHeader) {
+    if (nextShow !== showHeader) {
       await new Promise<void>(resolve => setTimeout(resolve, 1));
-      setShowCompactHeader(nextShow);
+      setShowHeader(nextShow);
     }
     lastScrollTop.current = scrollTop
+    if (p.onscroll) p.onscroll(event)
   }
 
 
@@ -158,8 +157,7 @@ export function PhotoGallery(p: PhotoGalleryProps) {
   }
 
   return <>
-
-    <div style={{ flex: 1, overflowY: 'auto' }} onScroll={handleScroll}>
+    <div style={{overflowY: 'auto', height: '100%' }} onScroll={handleScroll}>
       <div ref={headerRef}
         style={{
           position: 'sticky',
@@ -169,97 +167,102 @@ export function PhotoGallery(p: PhotoGalleryProps) {
           zIndex: 8,
           overflow: 'hidden',
           transition: 'transform 160ms ease 0s, opacity 160ms 0s',
-          transform: showCompactHeader ? 'translateY(0)' : 'translateY(-100%)',
-          opacity: showCompactHeader ? 1 : 0,
-          pointerEvents: showCompactHeader ? 'auto' : 'none',
+          transform: showHeader ? 'translateY(0)' : 'translateY(-100%)',
+          opacity: showHeader ? 1 : 0,
+          pointerEvents: showHeader ? 'auto' : 'none',
         }}>
         {p.header}
       </div>
       {p.loadingContent ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px' }}>
           <div className="w-8 h-8 border-2 rounded-full animate-spin"
             style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }} />
         </div>
-      ) : <>
-        {p.allVisible.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '1.5875cm 0.5292cm' }}>
-            <Camera size={40} style={{ color: 'var(--text-faint)', margin: '0 auto 0.3175cm', display: 'block' }} />
-            <p style={{ fontSize: '0.3704cm', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 0.3175cm' }}>
-              {t('memories.noPhotos')}
-            </p>
-            <button onClick={p.openPicker}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: '0.1323cm', padding: '0.2381cm 0.4763cm', borderRadius: '0.2646cm',
-                border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
-                fontSize: '0.3440cm', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-              <Plus size={15} /> {t('memories.addPhotos')}
-            </button>
-          </div>
-        ) : (
-          groupKeys.map(key => (
-            <div key={key} style={{ padding: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.1588cm', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2117cm', fontSize: '0.3704cm', fontWeight: 700, color: 'var(--text-muted)', paddingLeft: '0.0529cm', lineHeight: 1 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>{key}</span>
-                  {p.selectionEnabled && p.onToggleSelectGroup && (() => {
-                    const sectionKeys = grouped[key].map(photo => `${photo.provider}::${photo.asset_id}`)
-                    const selectableKeys = sectionKeys.filter(id => !p.disabledIds?.has(id))
-                    const selectedCount = selectableKeys.filter(id => p.selectedIds?.has(id)).length
-                    const allSelected = selectableKeys.length > 0 && selectedCount === selectableKeys.length
-                    return (
-                      <button
-                        onClick={() => p.onToggleSelectGroup(grouped[key])}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '0.5292cm',
-                          height: '0.5292cm',
-                          borderRadius: '50%',
-                          border: '0.0265cm solid var(--text-muted)',
-                          background: allSelected ? 'var(--text-muted)' : 'var(--bg-card)',
-                          color: allSelected ? 'var(--bg-card)' : 'var(--text-muted)',
-                          cursor: 'pointer',
-                        }}
-                        aria-label={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
-                        title={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
-                      >
-                        {allSelected && <Check size={12} />}
-                      </button>
-                    )
-                  })()}
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${p.itemMinSize ?? 4}cm, 1fr))`, gap: 6 }}>
-                {grouped[key].map(photo => {
-                  const photoKey = `${photo.user_id}::${photo.provider}::${photo.asset_id}`
-                  const selected = p.selectedIds?.has(photoKey) ?? false
-                  const disabled = p.disabledIds?.has(photoKey) ?? false
-                  const selectionMode = Boolean(p.selectionEnabled && p.onToggleSelect)
+      ) : p.allVisible.length === 0 ? p.canAddPhotos && (
+        <div style={{ textAlign: 'center', padding: '1.5875cm 0.5292cm' }}>
+          <Camera size={40} style={{ color: 'var(--text-faint)', margin: '0 auto 0.3175cm', display: 'block' }} />
+          <p style={{ fontSize: '0.3704cm', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 0.3175cm' }}>
+            {t('memories.noPhotos')}
+          </p>
+          <button onClick={p.openPicker}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.1323cm', padding: '0.2381cm 0.4763cm', borderRadius: '0.2646cm',
+              border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
+              fontSize: '0.3440cm', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+            <Plus size={15} /> {t('memories.addPhotos')}
+          </button>
+        </div>
+      ) : (<>
+        {groupKeys.map(key => (
+          <div key={key} style={{ padding: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.1588cm', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.2117cm', fontSize: '0.3704cm', fontWeight: 700, color: 'var(--text-muted)', paddingLeft: '0.0529cm', lineHeight: 1 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>{key}</span>
+                {p.selectionEnabled && p.onToggleSelectGroup && (() => {
+                  const sectionKeys = grouped[key].map(photo => `${photo.provider}::${photo.asset_id}`)
+                  const selectableKeys = sectionKeys.filter(id => !p.disabledIds?.has(id))
+                  const selectedCount = selectableKeys.filter(id => p.selectedIds?.has(id)).length
+                  const allSelected = selectableKeys.length > 0 && selectedCount === selectableKeys.length
                   return (
-                    <PhotoElement
-                      key={photoKey}
-                      photo={photo}
-                      currentUserId={p.currentUser?.id}
-                      buildProviderAssetUrl={p.buildProviderAssetUrl}
-                      onOpenLightbox={selectionMode ? () => { } : p.openLightbox}
-                      onToggleSharing={toggleSharing}
-                      onRemovePhoto={removePhoto}
-                      selectable={selectionMode}
-                      selected={selected}
-                      disabled={disabled}
-                      onSelect={p.onToggleSelect}
-                    />
+                    <button
+                      onClick={() => p.onToggleSelectGroup(grouped[key])}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '0.5292cm',
+                        height: '0.5292cm',
+                        borderRadius: '50%',
+                        border: '0.0265cm solid var(--text-muted)',
+                        background: allSelected ? 'var(--text-muted)' : 'var(--bg-card)',
+                        color: allSelected ? 'var(--bg-card)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                      aria-label={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
+                      title={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
+                    >
+                      {allSelected && <Check size={12} />}
+                    </button>
                   )
-                })}
+                })()}
               </div>
             </div>
-          ))
-        )
-        }
-      </>}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${p.itemMinSize ?? 4}cm, 1fr))`, gap: 6 }}>
+              {grouped[key].map(photo => {
+                const photoKey = `${photo.user_id}::${photo.provider}::${photo.asset_id}`
+                const selected = p.selectedIds?.has(photoKey) ?? false
+                const disabled = p.disabledIds?.has(photoKey) ?? false
+                const selectionMode = Boolean(p.selectionEnabled && p.onToggleSelect)
+                return (
+                  <PhotoElement
+                    key={photoKey}
+                    photo={photo}
+                    tripId={p.tripId}
+                    currentUserId={p.currentUser?.id}
+                    onOpenLightbox={selectionMode ? () => { } : p.openLightbox}
+                    onToggleSharing={toggleSharing}
+                    onRemovePhoto={removePhoto}
+                    selectable={selectionMode}
+                    selected={selected}
+                    disabled={disabled}
+                    onSelect={p.onToggleSelect}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        ))}
+        {p.loadingMore && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
+            <div
+              className="w-7 h-7 border-2 rounded-full animate-spin"
+              style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }}
+            />
+          </div>
+        )}
+      </>
+      )}
     </div>
   </>;
-
 }

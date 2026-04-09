@@ -326,7 +326,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       }}
       loadingContent={pickerLoading}
       loadingMore={pickerLoadingMore}
-      itemMinSize={3}
+      itemMinSize={120}
       scrollRef={scrollRef}
       onscroll={handleScroll}
       afterItems={pickerLoadError ? (
@@ -350,7 +350,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
               fontWeight: 600,
             }}
           >
-            {t('common.tryAgain') || 'Try again'}
+            {t('memories.tryAgain') || 'Try again'}
           </button>
         </div>
       ) : undefined}

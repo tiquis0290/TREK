@@ -1462,6 +1462,14 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'memories.error.removePhoto': 'Failed to remove photo',
   'memories.error.toggleSharing': 'Failed to update sharing',
 
+  //memories v2
+  'memories.filter.day': 'Day',
+  'memories.filter.week': 'Week',
+  'memories.filter.month': 'Month',
+  'memories.filter.year': 'Year',
+  'memories.tryAgain': 'Try again',
+
+
   // Collab Addon
   'collab.tabs.chat': 'Chat',
   'collab.tabs.notes': 'Notes',

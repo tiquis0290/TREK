@@ -98,15 +98,17 @@ export function MemoriesLightbox({
       if (currentIndex.current > -1 && Math.abs(currentIndex.current - newIndex) < 4) prefetchPhoto(allVisible[newIndex], newIndex, direction)
     }
 
-    if (!infoCacheRef.current[key] && !pendingInfoFetches.current[key]) {
-      pendingInfoFetches.current[key] = apiClient.get(buildProviderAssetMemoriesUrl(tripId, photo, 'info'))
-        .then(r => {
-          infoCacheRef.current[key] = r.data
-        })
-        .catch(() => {
-          infoCacheRef.current[key] = null
-        })
-        .finally(() => { delete pendingInfoFetches.current[key] })
+    if (!infoCacheRef.current[key]) {
+      if (!pendingInfoFetches.current[key]) {
+        pendingInfoFetches.current[key] = apiClient.get(buildProviderAssetMemoriesUrl(tripId, photo, 'info'))
+          .then(r => {
+            infoCacheRef.current[key] = r.data
+          })
+          .catch(() => {
+            infoCacheRef.current[key] = null
+          })
+          .finally(() => { delete pendingInfoFetches.current[key] })
+      }
     }
   }
 
@@ -141,8 +143,8 @@ export function MemoriesLightbox({
     if (!currentPhoto) return
 
     const key = getPhotoKey(currentPhoto)
-    let active = true
 
+    const index = currentIndex.current
     const prefetchNeighbors = () => {
       const prevPhoto = allVisible[currentIndex.current - 1]
       const nextPhoto = allVisible[currentIndex.current + 1]
@@ -174,21 +176,21 @@ export function MemoriesLightbox({
       pendingImageFetches.current[key]
         .then(() => {
           const blobUrl = imageCacheRef.current[key]
-          if (active && blobUrl) {
+          if (index === currentIndex.current && blobUrl) {
             setLightboxOriginalSrc(blobUrl)
             setLightboxImageLoading(false)
             prefetchNeighbors()
           }
         })
         .catch(() => {
-          if (active) {
+          if (index === currentIndex.current) {
             setLightboxOriginalSrc('')
             setLightboxImageLoading(false)
           }
         })
     } else {
       const blobUrl = imageCacheRef.current[key]
-      if (active) {
+      if (index === currentIndex.current && blobUrl) {
         setLightboxOriginalSrc(blobUrl)
         setLightboxImageLoading(false)
         prefetchNeighbors()
@@ -196,20 +198,25 @@ export function MemoriesLightbox({
     }
 
     if (!infoCacheRef.current[key]) {
-      pendingInfoFetches.current[key] = apiClient.get(buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'info'))
-        .then(r => {
-          infoCacheRef.current[key] = r.data
-          if (active) setLightboxInfo(r.data)
+      if (!pendingInfoFetches.current[key]) {
+        pendingInfoFetches.current[key] = apiClient.get(buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'info'))
+          .then(r => {
+            infoCacheRef.current[key] = r.data
+          })
+          .catch(() => {
+            infoCacheRef.current[key] = null
+          })
+          .finally(() => { delete pendingInfoFetches.current[key] })
+      }
+        pendingInfoFetches.current[key].then(() => {
+          const data = infoCacheRef.current[key]
+          if (index === currentIndex.current) setLightboxInfo(data)
         })
         .catch(() => {
           infoCacheRef.current[key] = null
-          if (active) setLightboxInfo(null)
+          if (index === currentIndex.current) setLightboxInfo(null)
         })
-        .finally(() => { if (active) setLightboxInfoLoading(false); delete pendingInfoFetches.current[key] })
-    }
-
-    return () => {
-      active = false
+        .finally(() => { if (index === currentIndex.current) setLightboxInfoLoading(false)})
     }
   }, [currentPhoto, currentIndex, tripId, allVisible])
 

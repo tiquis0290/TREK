@@ -1,5 +1,5 @@
 import { User } from "../../../types";
-import { useRef, useState, type UIEvent } from 'react'
+import { useRef, useState, type ReactNode, type UIEvent } from 'react'
 import { Camera, Plus, Check } from 'lucide-react'
 import { PhotoElement } from "./PhotoElement";
 import { TripPhoto } from "../types";
@@ -29,6 +29,8 @@ interface PhotoGalleryProps {
   scrollRef?: React.MutableRefObject<HTMLDivElement>;
   onscroll?: (event: UIEvent<HTMLDivElement>) => void;
   canAddPhotos?: boolean;
+  afterItems?: ReactNode;
+  isOffline?: boolean;
 }
 
 export function PhotoGallery(p: PhotoGalleryProps) {
@@ -42,6 +44,11 @@ export function PhotoGallery(p: PhotoGalleryProps) {
   // ── Remove photo ──────────────────────────────────────────────────────────
 
   const removePhoto = async (photo: TripPhoto) => {
+    if (p.isOffline) {
+      toast.error(t('memories.error.offline') || 'Offline mode: action unavailable')
+      return
+    }
+
     try {
       await apiClient.delete(buildUnifiedMemoriesUrl(p.tripId, 'photos'), {
         data: {
@@ -49,13 +56,18 @@ export function PhotoGallery(p: PhotoGalleryProps) {
           provider: photo.provider,
         },
       })
-      p.setTripPhotos(prev => prev.filter(p => !(p.provider === photo.provider && p.asset_id === photo.asset_id)))
+      p.setTripPhotos(prev => prev.filter(p => !(p.provider === photo.provider && p.asset_id === photo.asset_id && p.user_id === photo.user_id)))
     } catch { toast.error(t('memories.error.removePhoto')) }
   }
 
   // ── Toggle sharing ────────────────────────────────────────────────────────
 
   const toggleSharing = async (photo: TripPhoto, shared: boolean) => {
+    if (p.isOffline) {
+      toast.error(t('memories.error.offline') || 'Offline mode: action unavailable')
+      return
+    }
+
     try {
       await apiClient.put(buildUnifiedMemoriesUrl(p.tripId, 'photos', 'sharing'), {
         shared,
@@ -63,7 +75,9 @@ export function PhotoGallery(p: PhotoGalleryProps) {
         provider: photo.provider,
       })
       p.setTripPhotos(prev => prev.map(p =>
-        p.provider === photo.provider && p.asset_id === photo.asset_id ? { ...p, shared: shared ? 1 : 0 } : p
+        p.provider === photo.provider && p.asset_id === photo.asset_id && p.user_id === photo.user_id
+          ? { ...p, shared: shared ? 1 : 0 }
+          : p
       ))
     } catch { toast.error(t('memories.error.toggleSharing')) }
   }
@@ -184,20 +198,25 @@ export function PhotoGallery(p: PhotoGalleryProps) {
           <div className="w-8 h-8 border-2 rounded-full animate-spin"
             style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }} />
         </div>
-      ) : p.allVisible.length === 0 ? p.canAddPhotos && (
-        <div style={{ textAlign: 'center', padding: '1.5875cm 0.5292cm' }}>
-          <Camera size={40} style={{ color: 'var(--text-faint)', margin: '0 auto 0.3175cm', display: 'block' }} />
-          <p style={{ fontSize: '0.3704cm', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 0.3175cm' }}>
-            {t('memories.noPhotos')}
-          </p>
-          <button onClick={p.openPicker}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.1323cm', padding: '0.2381cm 0.4763cm', borderRadius: '0.2646cm',
-              border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
-              fontSize: '0.3440cm', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-            <Plus size={15} /> {t('memories.addPhotos')}
-          </button>
+      ) : p.allVisible.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          {p.canAddPhotos ? (
+            <>
+              <Camera size={40} style={{ color: 'var(--text-faint)', margin: '0 auto 12px', display: 'block' }} />
+              <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 12px' }}>
+                {t('memories.noPhotos')}
+              </p>
+              <button onClick={p.openPicker}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '9px 18px', borderRadius: '10px',
+                  border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
+                  fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                <Plus size={15} /> {t('memories.addPhotos')}
+              </button>
+            </>
+          ) : null}
+          {p.afterItems}
         </div>
       ) : (<>
         {groupKeys.map(key => (
@@ -205,7 +224,7 @@ export function PhotoGallery(p: PhotoGalleryProps) {
             <div style={{ display: 'flex', alignItems: 'center', fontSize: '21px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-muted)', paddingLeft: '5px', lineHeight: 1 }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1, padding: '6px' }}>{key}</span>
               {p.onToggleSelectGroup && (() => {
-                const sectionKeys = grouped[key].map(photo => `${photo.user_id}::${photo.provider}::${photo.asset_id}`)
+                const sectionKeys = grouped[key].map(photo => photo.key)
                 const selectableKeys = sectionKeys.filter(id => !p.disabledIds?.has(id))
                 if (selectableKeys.length === 0) return null
                 const selectedCount = selectableKeys.filter(id => p.selectedIds?.has(id)).length
@@ -234,9 +253,9 @@ export function PhotoGallery(p: PhotoGalleryProps) {
                 )
               })()}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${p.itemMinSize ?? 4}cm, 1fr))`, gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${((p.itemMinSize ?? 4) * 37.795).toFixed(2)}px, 1fr))`, gap: 6 }}>
               {grouped[key].map(photo => {
-                const photoKey = `${photo.user_id}::${photo.provider}::${photo.asset_id}`
+                const photoKey = photo.key
                 const selected = p.selectedIds?.has(photoKey) ?? false
                 const disabled = p.disabledIds?.has(photoKey) ?? false
                 return (
@@ -266,6 +285,7 @@ export function PhotoGallery(p: PhotoGalleryProps) {
             />
           </div>
         )}
+        {p.afterItems}
       </>
       )}
     </div>

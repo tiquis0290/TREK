@@ -33,68 +33,69 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const [pickerHasMore, setPickerHasMore] = useState(false)
   const [pickerOffset, setPickerOffset] = useState(0)
   const [pickerPhotos, setPickerPhotos] = useState<Asset[]>([])
+  const [pickerLoadError, setPickerLoadError] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showConfirmShare, setShowConfirmShare] = useState(false)
 
+  const mountedRef = useRef(true)
+
+  const loadPickerPhotos = async (offset: number, append: boolean) => {
+    if (!p.selectedProvider) {
+      setPickerPhotos([])
+      setPickerHasMore(false)
+      setPickerOffset(0)
+      setPickerLoading(false)
+      setPickerLoadingMore(false)
+      setPickerLoadError(false)
+      return
+    }
+
+    setPickerLoadError(false)
+    if (append) setPickerLoadingMore(true)
+    else setPickerLoading(true)
+
+    try {
+      const res = await apiClient.post(buildProviderMemoriesUrl(p.tripId, p.selectedProvider, 'search'), {
+        from: p.pickerDateFilter && p.startDate ? p.startDate : undefined,
+        to: p.pickerDateFilter && p.endDate ? p.endDate : undefined,
+        offset,
+        limit: PAGE_SIZE,
+      })
+
+      if (!mountedRef.current) return
+      const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: p.selectedProvider }))
+      setPickerPhotos(prev => append ? [...prev, ...incoming] : incoming)
+      setPickerOffset(offset + incoming.length)
+      setPickerHasMore(Boolean(res.data.hasMore) && incoming.length > 0)
+      setPickerLoadError(false)
+    } catch {
+      if (!mountedRef.current) return
+      if (!append) {
+        setPickerPhotos([])
+        setPickerHasMore(false)
+        setPickerOffset(0)
+      }
+      setPickerLoadError(true)
+      toast.error(t('memories.error.loadPhotos'))
+    } finally {
+      if (!mountedRef.current) return
+      if (append) setPickerLoadingMore(false)
+      else setPickerLoading(false)
+    }
+  }
+
   useEffect(() => {
-    let active = true
-
-    const loadPickerPhotos = async (offset: number, append: boolean) => {
-      if (!p.selectedProvider) {
-        if (active) {
-          setPickerPhotos([])
-          setPickerHasMore(false)
-          setPickerOffset(0)
-          setPickerLoading(false)
-          setPickerLoadingMore(false)
-        }
-        return
-      }
-
-      if (append) setPickerLoadingMore(true)
-      else setPickerLoading(true)
-
-      try {
-        const res = await apiClient.post(buildProviderMemoriesUrl(p.tripId, p.selectedProvider, 'search'), {
-          from: p.pickerDateFilter && p.startDate ? p.startDate : undefined,
-          to: p.pickerDateFilter && p.endDate ? p.endDate : undefined,
-          offset,
-          limit: PAGE_SIZE,
-        })
-
-        if (active) {
-          const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: p.selectedProvider }))
-          setPickerPhotos(prev => append ? [...prev, ...incoming] : incoming)
-          setPickerOffset(offset + incoming.length)
-          setPickerHasMore(Boolean(res.data.hasMore) && incoming.length > 0)
-        }
-      } catch {
-        if (active) {
-          if (!append) {
-            setPickerPhotos([])
-            setPickerHasMore(false)
-            setPickerOffset(0)
-          }
-          toast.error(t('memories.error.loadPhotos'))
-        }
-      } finally {
-        if (active) {
-          if (append) setPickerLoadingMore(false)
-          else setPickerLoading(false)
-        }
-      }
-    }
-
+    mountedRef.current = true
     loadPickerPhotos(0, false)
-
     return () => {
-      active = false
+      mountedRef.current = false
     }
-  }, [p.selectedProvider, p.pickerDateFilter, p.startDate, p.endDate, p.tripId, PAGE_SIZE])
+  }, [p.selectedProvider, p.pickerDateFilter, p.startDate, p.endDate, p.tripId])
 
   const loadMorePickerPhotos = async () => {
-    if (!p.selectedProvider || pickerLoading || pickerLoadingMore || !pickerHasMore) return
+    if (!p.selectedProvider || pickerLoading || pickerLoadingMore || !pickerHasMore ) return
 
+    setPickerLoadError(false)
     setPickerLoadingMore(true)
     try {
       const res = await apiClient.post(buildProviderMemoriesUrl(p.tripId, p.selectedProvider, 'search'), {
@@ -109,6 +110,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       setPickerOffset(prev => prev + incoming.length)
       setPickerHasMore(Boolean(res.data.hasMore) && incoming.length > 0)
     } catch {
+      setPickerLoadError(true)
       toast.error(t('memories.error.loadPhotos'))
     } finally {
       setPickerLoadingMore(false)
@@ -119,6 +121,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
     hasMore: pickerHasMore,
     loading: pickerLoading,
     loadingMore: pickerLoadingMore,
+    error: pickerLoadError,
     onLoadMore: loadMorePickerPhotos,
   })
 
@@ -126,23 +129,25 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
     hasMore,
     loading,
     loadingMore,
+    error,
     onLoadMore
   }: {
     hasMore: boolean
     loading: boolean
     loadingMore: boolean
+    error: boolean
     onLoadMore: () => void
   }) {
     const scrollRef = useRef<HTMLDivElement | null>(null)
 
     const handleScroll = useCallback(() => {
-      if (!hasMore || loading || loadingMore) return
+      if (!hasMore || loading || loadingMore || error) return
       const el = scrollRef.current
       if (!el) return
       if (el.scrollHeight - el.scrollTop < el.clientHeight * 3) {
         onLoadMore()
       }
-    }, [hasMore, loading, loadingMore, onLoadMore])
+    }, [hasMore, loading, loadingMore, error, onLoadMore])
 
     return { scrollRef, handleScroll }
   }
@@ -164,13 +169,13 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
             }
           }}
           style={{
-            padding: '0.1588cm 0.3704cm',
-            borderRadius: '2.6194cm',
-            fontSize: '0.3175cm',
+            padding: '6px 14px',
+            borderRadius: '99px',
+            fontSize: '12px',
             fontWeight: 600,
             cursor: 'pointer',
             fontFamily: 'inherit',
-            border: '0.0265cm solid',
+            border: '1px solid',
             transition: 'all 0.15s',
             background: p.pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
             borderColor: p.pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
@@ -186,13 +191,13 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
             }
           }}
           style={{
-            padding: '0.1588cm 0.3704cm',
-            borderRadius: '2.6194cm',
-            fontSize: '0.3175cm',
+            padding: '6px 14px',
+            borderRadius: '99px',
+            fontSize: '12px',
             fontWeight: 600,
             cursor: 'pointer',
             fontFamily: 'inherit',
-            border: '0.0265cm solid',
+            border: '1px solid',
             transition: 'all 0.15s',
             background: !p.pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
             borderColor: !p.pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
@@ -204,7 +209,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       </div>
 
       {selectedIds.size > 0 && (
-        <p style={{ margin: '0.2117cm 0 0', fontSize: '0.3175cm', fontWeight: 600, color: 'var(--text-primary)' }}>
+        <p style={{ margin: '8px 0 0', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
           {selectedIds.size} {t('memories.selected')}
         </p>
       )}
@@ -212,12 +217,12 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   )
 
   // Helper functions
-  const makePickerKey = (userId: number, provider: string, assetId: string): string => `${userId}::${provider}::${assetId}`
+  const makePickerKey = (tripId: number, userId: number, provider: string, assetId: string): string => `${tripId}::${userId}::${provider}::${assetId}`
 
   const alreadyAdded = new Set(
     p.tripPhotos
       .filter(tp => tp.user_id === p.currentUserId)
-      .map(tp => makePickerKey(tp.user_id, tp.provider, tp.asset_id))
+      .map(tp => makePickerKey(p.tripId, tp.user_id, tp.provider, tp.asset_id))
   )
 
   const onTogglePickerSelect = (id: string) => {
@@ -234,9 +239,10 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
     asset_id: asset.id,
     user_id: p.currentUserId || 0,
     username: '',
-    shared: alreadyAdded.has(makePickerKey(p.currentUserId, asset.provider, asset.id)) ? 1 : 0,
+    shared: alreadyAdded.has(makePickerKey(p.tripId, p.currentUserId, asset.provider, asset.id)) ? 1 : 0,
     added_at: asset.takenAt || new Date().toISOString(),
     taken_at: asset.takenAt || null,
+    key: makePickerKey(p.tripId, p.currentUserId, asset.provider, asset.id),
   })
 
   const pickerTripPhotos = pickerPhotos.map(buildPickerPhoto)
@@ -249,7 +255,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const executeAddPhotos = async () => {
     setShowConfirmShare(false)
     try {
-      const assetsByKey = new Map(pickerPhotos.map(asset => [makePickerKey(p.currentUserId, asset.provider, asset.id), asset]))
+      const assetsByKey = new Map(pickerPhotos.map(asset => [makePickerKey(p.tripId, p.currentUserId, asset.provider, asset.id), asset]))
       const groupedByProvider = new Map<string, Asset[]>()
       for (const key of selectedIds) {
         const asset = assetsByKey.get(key)
@@ -281,10 +287,10 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       onClick={confirmSelection}
       disabled={selectedIds.size === 0}
       style={{
-        padding: '0.1852cm 0.3704cm',
-        borderRadius: '0.2646cm',
+        padding: '7px 14px',
+        borderRadius: '10px',
         border: 'none',
-        fontSize: '0.3175cm',
+        fontSize: '12px',
         fontWeight: 600,
         cursor: selectedIds.size > 0 ? 'pointer' : 'default',
         fontFamily: 'inherit',
@@ -323,6 +329,31 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       itemMinSize={3}
       scrollRef={scrollRef}
       onscroll={handleScroll}
+      afterItems={pickerLoadError ? (
+        <div style={{ width: '100%', textAlign: 'center', padding: '20px' }}>
+          <button
+            onClick={() => {
+              if (pickerOffset > 0) {
+                loadMorePickerPhotos()
+              } else {
+                loadPickerPhotos(0, false)
+              }
+            }}
+            style={{
+              padding: '12px 24px',
+              borderRadius: '10px',
+              border: '1px solid var(--text-primary)',
+              background: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: 600,
+            }}
+          >
+            {t('common.tryAgain') || 'Try again'}
+          </button>
+        </div>
+      ) : undefined}
       header={
         <PickerHeader
           title={title}

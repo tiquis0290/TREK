@@ -9,6 +9,7 @@ import { createTodoSlice } from './slices/todoSlice'
 import { createBudgetSlice } from './slices/budgetSlice'
 import { createReservationsSlice } from './slices/reservationsSlice'
 import { createFilesSlice } from './slices/filesSlice'
+import { createMemoriesSlice, type MemoriesSlice } from './slices/memoriesSlice'
 import { handleRemoteEvent } from './slices/remoteEventHandler'
 import type {
   Trip, Day, Place, Assignment, DayNote, PackingItem, TodoItem,
@@ -33,7 +34,8 @@ export interface TripStoreState
     TodoSlice,
     BudgetSlice,
     ReservationsSlice,
-    FilesSlice {
+    FilesSlice,
+    MemoriesSlice {
   trip: Trip | null
   days: Day[]
   places: Place[]
@@ -72,6 +74,15 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
   budgetItems: [],
   files: [],
   reservations: [],
+  enabledProviders: [],
+  availableProviders: [],
+  selectedProvider: '',
+  connected: false,
+  loading: false,
+  loadingContent: false,
+  tripPhotos: [],
+  albumLinks: [],
+  syncing: null,
   selectedDayId: null,
   isLoading: false,
   error: null,
@@ -180,4 +191,5 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
   ...createBudgetSlice(set, get),
   ...createReservationsSlice(set, get),
   ...createFilesSlice(set, get),
+  ...createMemoriesSlice(set, get),
 }))

@@ -19,6 +19,8 @@ export interface TripPhoto extends PhotoMetadata {
   avatar?: string | null
   shared: number
   added_at: string
+  album_link_id?: number | null
+  key: string
 }
 
 export interface Asset extends PhotoMetadata {

@@ -131,9 +131,9 @@ export function MemoriesHeader(p: MemoriesHeaderProps) {
             background: 'var(--bg-card)', fontSize: '11px', fontFamily: 'inherit', color: 'var(--text-muted)',
             cursor: 'pointer', outline: 'none',
           }}>
-          <option value="day">{t('memories.day') || 'Day'}</option>
-          <option value="week">{t('memories.week') || 'Week'}</option>
-          <option value="month">{t('memories.month') || 'Month'}</option>
+          <option value="day">{t('memories.filter.day') || 'Day'}</option>
+          <option value="week">{t('memories.filter.week') || 'Week'}</option>
+          <option value="month">{t('memories.filter.month') || 'Month'}</option>
         </select>
         {p.locations.length > 1 && (
           <select value={p.locationFilter} onChange={e => p.onLocationFilterChange(e.target.value)}

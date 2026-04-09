@@ -20,37 +20,37 @@ export function ConfirmShareModal({ count, onCancel, onConfirm }: ConfirmShareMo
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '0.5292cm',
+        padding: '20px',
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--bg-card)',
-          borderRadius: '0.4233cm',
-          padding: '0.6350cm',
-          maxWidth: '9.5250cm',
+          borderRadius: '16px',
+          padding: '24px',
+          maxWidth: '360px',
           width: '100%',
-          boxShadow: '0 0.4233cm 1.2700cm rgba(0,0,0,0.2)',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.2)',
           textAlign: 'center',
         }}
       >
         <Share2 size={28} style={{ color: 'var(--text-primary)', marginBottom: 12 }} />
-        <h3 style={{ margin: '0 0 0.2117cm', fontSize: '0.4233cm', fontWeight: 700, color: 'var(--text-primary)' }}>
+        <h3 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
           {t('memories.confirmShareTitle')}
         </h3>
-        <p style={{ margin: '0 0 0.5292cm', fontSize: '0.3440cm', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        <p style={{ margin: '0 0 20px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
           {t('memories.confirmShareHint', { count })}
         </p>
-        <div style={{ display: 'flex', gap: '0.2117cm', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
           <button
             onClick={onCancel}
             style={{
-              padding: '0.2117cm 0.5292cm',
-              borderRadius: '0.2646cm',
-              border: '0.0265cm solid var(--border-primary)',
+              padding: '8px 20px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-primary)',
               background: 'none',
-              fontSize: '0.3440cm',
+              fontSize: '13px',
               cursor: 'pointer',
               fontFamily: 'inherit',
               color: 'var(--text-muted)',
@@ -61,10 +61,10 @@ export function ConfirmShareModal({ count, onCancel, onConfirm }: ConfirmShareMo
           <button
             onClick={onConfirm}
             style={{
-              padding: '0.2117cm 0.5292cm',
-              borderRadius: '0.2646cm',
+              padding: '8px 20px',
+              borderRadius: '10px',
               border: 'none',
-              fontSize: '0.3440cm',
+              fontSize: '13px',
               fontWeight: 600,
               cursor: 'pointer',
               fontFamily: 'inherit',

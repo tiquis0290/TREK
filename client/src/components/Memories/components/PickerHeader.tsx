@@ -22,18 +22,18 @@ export function PickerHeader(p: PickerTemplateProps) {
       height: '100%',
       background: 'var(--bg-primary)'
     }}>
-      <div style={{ padding: '0.3704cm 0.5292cm', borderBottom: '0.0265cm solid var(--border-secondary)' }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-secondary)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <h3 style={{ margin: '0cm', fontSize: '0.3969cm', fontWeight: 700, color: 'var(--text-primary)' }}>{p.title}</h3>
+          <h3 style={{ margin: '0px', fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>{p.title}</h3>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               onClick={p.onClose}
               style={{
-                padding: '0.1852cm 0.3704cm',
-                borderRadius: '0.2646cm',
-                border: '0.0265cm solid var(--border-primary)',
+                padding: '7px 14px',
+                borderRadius: '10px',
+                border: '1px solid var(--border-primary)',
                 background: 'none',
-                fontSize: '0.3175cm',
+                fontSize: '12px',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 color: 'var(--text-muted)',

@@ -5,16 +5,16 @@ import type { TripPhoto } from '../types'
 import { buildProviderAssetMemoriesUrl } from '../urlBuilders'
 
 interface PhotoElementProps {
+  keyId: string
   photo: TripPhoto
   currentUserId?: number
   onOpenLightbox: (photo: TripPhoto) => void
   onToggleSharing: (photo: TripPhoto, shared: boolean) => void
   onRemovePhoto: (photo: TripPhoto) => void
   tripId: number
-  selectable?: boolean
   selected?: boolean
   disabled?: boolean
-  onSelect?: (photo: TripPhoto) => void
+  onSelect?: (key: string) => void
 }
 
 export function PhotoElement(p: PhotoElementProps) {
@@ -23,8 +23,8 @@ export function PhotoElement(p: PhotoElementProps) {
   const usernameInitial = (p.photo.username?.[0] || '?').toUpperCase()
 
   const handleClick = () => {
-    if (p.selectable) {
-      if (!p.disabled && p.onSelect) p.onSelect(p.photo)
+    if (p.onSelect) {
+      if (!p.disabled && p.onSelect) p.onSelect(p.keyId)
       return
     }
 
@@ -41,8 +41,8 @@ export function PhotoElement(p: PhotoElementProps) {
         overflow: 'visible',
         cursor: p.disabled ? 'default' : 'pointer',
         opacity: p.disabled ? 0.3 : 1,
-        outline: p.selectable && p.selected ? '0.0794cm solid var(--text-muted)' : 'none',
-        outlineOffset: p.selectable && p.selected ? '-0.0794cm' : undefined,
+        outline: p.selected ? '0.0794cm solid var(--text-muted)' : 'none',
+        outlineOffset: p.selected ? '-0.0794cm' : undefined,
       }}
       onClick={handleClick}
     >
@@ -53,7 +53,7 @@ export function PhotoElement(p: PhotoElementProps) {
       />
 
 
-      {p.selectable && p.selected && (
+      {p.selected && (
         <>
           <div
             style={{
@@ -75,13 +75,14 @@ export function PhotoElement(p: PhotoElementProps) {
 
         </>
       )}
-      {p.selectable && p.disabled && (
+      {p.disabled && (
         <div
           style={{
             position: 'absolute',
             inset: 0,
             display: 'flex',
             alignItems: 'center',
+            borderRadius: '0.2117cm',
             justifyContent: 'center',
             background: 'rgba(0,0,0,0.36)',
             color: 'white',
@@ -94,7 +95,7 @@ export function PhotoElement(p: PhotoElementProps) {
         </div>
       )}
 
-      {!p.selectable && !isOwn && (
+      {!isOwn && (
         <div className="memories-avatar" style={{ position: 'absolute', bottom: '0.1587cm', left: '0.1587cm', zIndex: 7 }}>
           <div style={{
             width: '0.635cm',
@@ -143,7 +144,7 @@ export function PhotoElement(p: PhotoElementProps) {
         
       )}
 
-      {isOwn && !p.selectable && (
+      {isOwn && !p.onSelect && (
         <div
           className="opacity-0 group-hover:opacity-100"
           style={{ position: 'absolute', top: '0.1058cm', right: '0.1058cm', display: 'flex', gap: '0.0794cm', transition: 'opacity 0.15s' }}
@@ -192,7 +193,7 @@ export function PhotoElement(p: PhotoElementProps) {
         </div>
       )}
 
-      {isOwn && !p.selectable && !p.photo.shared && (
+      {isOwn && !p.onSelect && !p.photo.shared && (
         <div
           style={{
             position: 'absolute',

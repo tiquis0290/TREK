@@ -20,8 +20,8 @@ interface PhotoGalleryProps {
   selectionEnabled?: boolean;
   selectedIds?: Set<string>;
   disabledIds?: Set<string>;
-  onToggleSelect?: (photo: TripPhoto) => void;
-  onToggleSelectGroup?: (groupPhotos: TripPhoto[]) => void;
+  onToggleSelect?: (key: string) => void;
+  onToggleSelectGroup?: (keys: string[], oldState: boolean) => void;
   header?: React.ReactNode;
   loadingContent?: boolean;
   loadingMore?: boolean;
@@ -70,10 +70,16 @@ export function PhotoGallery(p: PhotoGalleryProps) {
 
   // -- scroll handling for compact header ---
 
+  const [lastHeaderHeight, setLastHeaderHeight] = useState(0)
+
   const handleScroll = async (event: UIEvent<HTMLDivElement>) => {
     const scrollTop = event.currentTarget.scrollTop
     const delta = scrollTop - lastScrollTop.current
     const minShow = headerRef.current?.offsetHeight * 1.1 || 100
+    if (lastHeaderHeight !== headerRef.current?.offsetHeight) {
+      setLastHeaderHeight(headerRef.current?.offsetHeight || 0)
+      return
+    }
     let nextShow = showHeader
     let mindelta = 1
 
@@ -157,7 +163,7 @@ export function PhotoGallery(p: PhotoGalleryProps) {
   }
 
   return <>
-    <div style={{overflowY: 'auto', height: '100%' }} onScroll={handleScroll} ref={p.scrollRef}>
+    <div style={{ overflowY: 'auto', height: '100%' }} onScroll={handleScroll} ref={p.scrollRef}>
       <div ref={headerRef}
         style={{
           position: 'sticky',
@@ -196,54 +202,53 @@ export function PhotoGallery(p: PhotoGalleryProps) {
       ) : (<>
         {groupKeys.map(key => (
           <div key={key} style={{ padding: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.1588cm', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.2117cm', fontSize: '0.3704cm', fontWeight: 700, color: 'var(--text-muted)', paddingLeft: '0.0529cm', lineHeight: 1 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>{key}</span>
-                {p.selectionEnabled && p.onToggleSelectGroup && (() => {
-                  const sectionKeys = grouped[key].map(photo => `${photo.provider}::${photo.asset_id}`)
-                  const selectableKeys = sectionKeys.filter(id => !p.disabledIds?.has(id))
-                  const selectedCount = selectableKeys.filter(id => p.selectedIds?.has(id)).length
-                  const allSelected = selectableKeys.length > 0 && selectedCount === selectableKeys.length
-                  return (
-                    <button
-                      onClick={() => p.onToggleSelectGroup(grouped[key])}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '0.5292cm',
-                        height: '0.5292cm',
-                        borderRadius: '50%',
-                        border: '0.0265cm solid var(--text-muted)',
-                        background: allSelected ? 'var(--text-muted)' : 'var(--bg-card)',
-                        color: allSelected ? 'var(--bg-card)' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                      }}
-                      aria-label={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
-                      title={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
-                    >
-                      {allSelected && <Check size={12} />}
-                    </button>
-                  )
-                })()}
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: '21px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-muted)', paddingLeft: '5px', lineHeight: 1 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1, padding: '6px' }}>{key}</span>
+              {p.onToggleSelectGroup && (() => {
+                const sectionKeys = grouped[key].map(photo => `${photo.user_id}::${photo.provider}::${photo.asset_id}`)
+                const selectableKeys = sectionKeys.filter(id => !p.disabledIds?.has(id))
+                if (selectableKeys.length === 0) return null
+                const selectedCount = selectableKeys.filter(id => p.selectedIds?.has(id)).length
+                const allSelected = selectedCount === selectableKeys.length
+                return (
+                  <button
+                    onClick={() => p.onToggleSelectGroup(selectableKeys, allSelected)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '20px',
+                      height: '20px',
+                      marginTop: '2px',
+                      borderRadius: '50%',
+                      border: '3px solid var(--text-muted)',
+                      background: allSelected ? 'var(--text-muted)' : 'var(--bg-card)',
+                      color: allSelected ? 'var(--bg-card)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                    }}
+                    aria-label={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
+                    title={allSelected ? t('memories.deselectSection') || 'Deselect section' : t('memories.selectSection') || 'Select section'}
+                  >
+                    {allSelected && <Check size={12} />}
+                  </button>
+                )
+              })()}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${p.itemMinSize ?? 4}cm, 1fr))`, gap: 6 }}>
               {grouped[key].map(photo => {
                 const photoKey = `${photo.user_id}::${photo.provider}::${photo.asset_id}`
                 const selected = p.selectedIds?.has(photoKey) ?? false
                 const disabled = p.disabledIds?.has(photoKey) ?? false
-                const selectionMode = Boolean(p.selectionEnabled && p.onToggleSelect)
                 return (
                   <PhotoElement
                     key={photoKey}
+                    keyId={photoKey}
                     photo={photo}
                     tripId={p.tripId}
                     currentUserId={p.currentUser?.id}
-                    onOpenLightbox={selectionMode ? () => { } : p.openLightbox}
+                    onOpenLightbox={p.openLightbox}
                     onToggleSharing={toggleSharing}
                     onRemovePhoto={removePhoto}
-                    selectable={selectionMode}
                     selected={selected}
                     disabled={disabled}
                     onSelect={p.onToggleSelect}

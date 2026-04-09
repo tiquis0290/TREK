@@ -212,12 +212,12 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   )
 
   // Helper functions
-  const makePickerKey = (provider: string, assetId: string): string => `${provider}::${assetId}`
+  const makePickerKey = (userId: number, provider: string, assetId: string): string => `${userId}::${provider}::${assetId}`
 
   const alreadyAdded = new Set(
     p.tripPhotos
       .filter(tp => tp.user_id === p.currentUserId)
-      .map(tp => makePickerKey(tp.provider, tp.asset_id))
+      .map(tp => makePickerKey(tp.user_id, tp.provider, tp.asset_id))
   )
 
   const onTogglePickerSelect = (id: string) => {
@@ -234,7 +234,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
     asset_id: asset.id,
     user_id: p.currentUserId || 0,
     username: '',
-    shared: alreadyAdded.has(makePickerKey(asset.provider, asset.id)) ? 1 : 0,
+    shared: alreadyAdded.has(makePickerKey(p.currentUserId, asset.provider, asset.id)) ? 1 : 0,
     added_at: asset.takenAt || new Date().toISOString(),
     taken_at: asset.takenAt || null,
   })
@@ -249,7 +249,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const executeAddPhotos = async () => {
     setShowConfirmShare(false)
     try {
-      const assetsByKey = new Map(pickerPhotos.map(asset => [makePickerKey(asset.provider, asset.id), asset]))
+      const assetsByKey = new Map(pickerPhotos.map(asset => [makePickerKey(p.currentUserId, asset.provider, asset.id), asset]))
       const groupedByProvider = new Map<string, Asset[]>()
       for (const key of selectedIds) {
         const asset = assetsByKey.get(key)
@@ -309,7 +309,15 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       selectionEnabled
       selectedIds={selectedIds}
       disabledIds={alreadyAdded}
-      onToggleSelect={(photo) => onTogglePickerSelect(makePickerKey(photo.provider, photo.asset_id))}
+      onToggleSelect={onTogglePickerSelect}
+      onToggleSelectGroup={(groupPhotos, oldState) => {
+        setSelectedIds(prev => {
+          const next = new Set(prev)
+          if (oldState) groupPhotos.forEach(k => next.delete(k))
+          else groupPhotos.forEach(k => next.add(k))
+          return next
+        })
+      }}
       loadingContent={pickerLoading}
       loadingMore={pickerLoadingMore}
       itemMinSize={3}

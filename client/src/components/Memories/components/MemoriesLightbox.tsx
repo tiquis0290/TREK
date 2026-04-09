@@ -381,6 +381,7 @@ export function MemoriesLightbox({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        pointerEvents: 'auto',
       }}
     >
       <button
@@ -526,7 +527,6 @@ export function MemoriesLightbox({
         ))}
 
         <div
-          onClick={e => e.stopPropagation()}
           style={{
             flex: 1,
             minWidth: '0cm',

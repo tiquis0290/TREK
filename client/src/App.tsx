@@ -17,6 +17,7 @@ import { TranslationProvider, useTranslation } from './i18n'
 import { authApi } from './api/client'
 import { usePermissionsStore, PermissionLevel } from './store/permissionsStore'
 import { useInAppNotificationListener } from './hooks/useInAppNotificationListener.ts'
+import { OverlayContainer } from './components/shared/Overlay.tsx'
 
 interface ProtectedRouteProps {
   children: ReactNode
@@ -157,6 +158,7 @@ export default function App() {
 
   return (
     <TranslationProvider>
+      <OverlayContainer />
       <ToastContainer />
       <Routes>
         <Route path="/" element={<RootRedirect />} />

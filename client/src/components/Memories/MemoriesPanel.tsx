@@ -14,11 +14,13 @@ import { PhotoGallery } from './components/PhotoGallery'
 import { MemoriesHeader } from './components/MemoriesHeader.tsx'
 import { useState as useReactState } from 'react';
 import { buildProviderMemoriesUrl, buildUnifiedMemoriesUrl } from './urlBuilders.ts'
+import { useOverlay } from '../shared/Overlay.tsx'
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPanelProps) {
   const { t } = useTranslation()
+  const overlay = useOverlay()
   const toast = useToast()
   const currentUser = useAuthStore(s => s.user)
 
@@ -49,6 +51,16 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [lightboxPhoto, setLightbox] = useState<TripPhoto | null>(null)
 
   // ── Init ──────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    overlay.show(lightboxPhoto ? <MemoriesLightbox
+        allVisible={allVisible}
+        tripId={tripId}
+        initialPhoto={lightboxPhoto}
+        onClose={() => setLightbox(null)}
+      />: null)
+  }, [lightboxPhoto])
+
 
   useEffect(() => {
     loadInitial()
@@ -184,6 +196,9 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif",
   }
 
+
+
+
   // ── Loading ───────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -304,12 +319,6 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
         loadingContent={loadingContent}
         groupBy={groupBy}
         sortOrder={sortAsc ? 'oldest' : 'newest'}
-      />
-      <MemoriesLightbox
-        allVisible={allVisible}
-        tripId={tripId}
-        initialPhoto={lightboxPhoto}
-        onClose={() => setLightbox(null)}
       />
     </div>
   )

@@ -26,7 +26,7 @@ interface PhotoGalleryProps {
   loadingContent?: boolean;
   loadingMore?: boolean;
   itemMinSize?: number;
-  scrollRef?: React.RefObject<HTMLDivElement>;
+  scrollRef?: React.MutableRefObject<HTMLDivElement>;
   onscroll?: (event: UIEvent<HTMLDivElement>) => void;
   canAddPhotos?: boolean;
 }
@@ -36,7 +36,7 @@ export function PhotoGallery(p: PhotoGalleryProps) {
   const toast = useToast()
 
   const [showHeader, setShowHeader] = useState(true)
-  const headerRef = useRef<HTMLDivElement | null>(p.scrollRef?.current || null)
+  const headerRef = useRef<HTMLDivElement | null>(null)
   const lastScrollTop = useRef(0)
 
   // ── Remove photo ──────────────────────────────────────────────────────────
@@ -157,7 +157,7 @@ export function PhotoGallery(p: PhotoGalleryProps) {
   }
 
   return <>
-    <div style={{overflowY: 'auto', height: '100%' }} onScroll={handleScroll}>
+    <div style={{overflowY: 'auto', height: '100%' }} onScroll={handleScroll} ref={p.scrollRef}>
       <div ref={headerRef}
         style={{
           position: 'sticky',

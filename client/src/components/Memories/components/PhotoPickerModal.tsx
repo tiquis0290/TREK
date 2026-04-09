@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import apiClient from '../../../api/client'
-import { Camera } from 'lucide-react'
 import { clearImageQueue } from '../../../api/authUrl'
 import { useTranslation } from '../../../i18n'
 import { useToast } from '../../shared/Toast'
@@ -9,7 +8,6 @@ import { ConfirmShareModal } from './ConfirmShareModal'
 import { PickerHeader } from './PickerHeader'
 import { buildProviderMemoriesUrl, buildUnifiedMemoriesUrl } from '../urlBuilders'
 import type { Asset, PhotoProvider, TripPhoto } from '../types'
-import { isLoading } from '../../../services/photoService'
 
 interface PhotoPickerModalProps {
   availableProviders: PhotoProvider[]
@@ -141,7 +139,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       if (!hasMore || loading || loadingMore) return
       const el = scrollRef.current
       if (!el) return
-      if (el.scrollHeight - el.scrollTop - el.clientHeight < el.clientHeight * 2) {
+      if (el.scrollHeight - el.scrollTop < el.clientHeight * 3) {
         onLoadMore()
       }
     }, [hasMore, loading, loadingMore, onLoadMore])
@@ -315,6 +313,8 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       loadingContent={pickerLoading}
       loadingMore={pickerLoadingMore}
       itemMinSize={3}
+      scrollRef={scrollRef}
+      onscroll={handleScroll}
       header={
         <PickerHeader
           title={title}

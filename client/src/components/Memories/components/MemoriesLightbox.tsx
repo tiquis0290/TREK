@@ -35,42 +35,44 @@ export function MemoriesLightbox({
   const pendingImageControllers = useRef<Record<string, AbortController>>({})
   const lastNavigation = useRef<'prev' | 'next' | null>(null)
 
+  const mobileInfoRef = useRef<HTMLDivElement | null>(null)
+
   const getPhotoKey = (photo: TripPhoto) => `${photo.provider}::${photo.asset_id}::${photo.user_id}`
 
-  
-    const validateImageUrl = (url: string, signal: AbortSignal): Promise<boolean> => {
-      return new Promise<boolean>(resolve => {
-        const img = new Image()
-        let settled = false
 
-        const cleanupValidation = () => {
-          if (settled) return
-          settled = true
-          img.onload = null
-          img.onerror = null
-          URL.revokeObjectURL(url)
-        }
+  const validateImageUrl = (url: string, signal: AbortSignal): Promise<boolean> => {
+    return new Promise<boolean>(resolve => {
+      const img = new Image()
+      let settled = false
 
-        img.onload = () => {
-          if (settled) return
-          cleanupValidation()
-          resolve(true)
-        }
-        img.onerror = () => {
-          if (settled) return
-          cleanupValidation()
-          resolve(false)
-        }
+      const cleanupValidation = () => {
+        if (settled) return
+        settled = true
+        img.onload = null
+        img.onerror = null
+        URL.revokeObjectURL(url)
+      }
 
-        signal.addEventListener('abort', () => {
-          if (settled) return
-          cleanupValidation()
-          resolve(false)
-        }, { once: true })
+      img.onload = () => {
+        if (settled) return
+        cleanupValidation()
+        resolve(true)
+      }
+      img.onerror = () => {
+        if (settled) return
+        cleanupValidation()
+        resolve(false)
+      }
 
-        img.src = url
-      })
-    }
+      signal.addEventListener('abort', () => {
+        if (settled) return
+        cleanupValidation()
+        resolve(false)
+      }, { once: true })
+
+      img.src = url
+    })
+  }
 
   const prefetchPhoto = (photo: TripPhoto, index: number, direction: -1 | 1) => {
     const key = getPhotoKey(photo)
@@ -208,15 +210,15 @@ export function MemoriesLightbox({
           })
           .finally(() => { delete pendingInfoFetches.current[key] })
       }
-        pendingInfoFetches.current[key].then(() => {
-          const data = infoCacheRef.current[key]
-          if (index === currentIndex.current) setLightboxInfo(data)
-        })
+      pendingInfoFetches.current[key].then(() => {
+        const data = infoCacheRef.current[key]
+        if (index === currentIndex.current) setLightboxInfo(data)
+      })
         .catch(() => {
           infoCacheRef.current[key] = null
           if (index === currentIndex.current) setLightboxInfo(null)
         })
-        .finally(() => { if (index === currentIndex.current) setLightboxInfoLoading(false)})
+        .finally(() => { if (index === currentIndex.current) setLightboxInfoLoading(false) })
     }
   }, [currentPhoto, currentIndex, tripId, allVisible])
 
@@ -497,7 +499,7 @@ export function MemoriesLightbox({
         onClick={e => {
           if (e.target === e.currentTarget) closeLightbox()
         }}
-        style={{ display: 'flex', gap: '0.4233cm', alignItems: 'center' , justifyContent: 'center', padding: '0.5292cm', width: '100%', height: '100%' }}
+        style={{ display: 'flex', gap: '0.4233cm', alignItems: 'center', justifyContent: 'center', padding: '0.5292cm', width: '100%', height: '100%' }}
       >
         {!isMobile && (hasPrev ? (
           <button
@@ -583,7 +585,7 @@ export function MemoriesLightbox({
           <div aria-hidden style={{ width: '1.0583cm', height: '1.0583cm', flexShrink: 0 }} />
         ))}
 
-        {!isMobile && showMobileInfo  && (
+        {!isMobile && showMobileInfo && (
           <div
             style={{
               width: '6.3500cm',
@@ -602,7 +604,7 @@ export function MemoriesLightbox({
               overflowY: 'auto',
             }}
           >
-            {!isMobile && lightboxInfoLoading && (
+            {lightboxInfoLoading && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: 'white' }} />
               </div>
@@ -613,8 +615,9 @@ export function MemoriesLightbox({
 
       </div>
 
-      {isMobile && showMobileInfo && lightboxInfo && (
+      {isMobile && showMobileInfo && (
         <div
+          ref={mobileInfoRef}
           onClick={e => e.stopPropagation()}
           style={{
             position: 'absolute',
@@ -637,6 +640,11 @@ export function MemoriesLightbox({
             gap: '0.3704cm',
           }}
         >
+          {lightboxInfoLoading && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: 'white' }} />
+            </div>
+          )}
           {exifContent}
         </div>
       )}

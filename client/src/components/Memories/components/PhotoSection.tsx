@@ -31,13 +31,17 @@ function chunkPhotos<T>(items: T[], size: number): T[][] {
     return rows
 }
 
-function PhotoRow({ children, itemSize }: { children: ReactNode, itemSize: number }) {
+function PhotoRow({ children, itemSize, observe }: { children: ReactNode, itemSize: number, observe?: boolean }) {
     const element = useRef<HTMLDivElement | null>(null)
     const [visible, setVisible] = useState(false)
 
     useEffect(() => {
-        return observeIntersection(element.current, setVisible)
-    }, [children])
+        if (observe) {
+            return observeIntersection(element.current, setVisible)
+        } else {
+            setVisible(true)
+        }
+    }, [children, observe])
 
     return (
         <div
@@ -47,7 +51,6 @@ function PhotoRow({ children, itemSize }: { children: ReactNode, itemSize: numbe
                 height: visible ? 'auto' : itemSize,
                 display: 'flex',
                 gap: 6,
-                marginBottom: 6,
                 overflow: 'hidden',
             }}
         >
@@ -57,14 +60,14 @@ function PhotoRow({ children, itemSize }: { children: ReactNode, itemSize: numbe
 }
 
 export function PhotoSection(p: PhotoSectionProps) {
-    
     const { t } = useTranslation()
     const element = useRef<HTMLDivElement | null>(null)
     const [close, setClose] = useState(true)
     const [columns, setColumns] = useState(1)
     const [itemSize, setItemSize] = useState(p.itemMinSize ?? 160)
     const [height, setHeight] = useState(0)
-
+    const PADDING = 10
+    
     useEffect(() => {
         if (!element.current || typeof IntersectionObserver === 'undefined') {
             setClose(true)
@@ -78,12 +81,13 @@ export function PhotoSection(p: PhotoSectionProps) {
 
         setColumns(columnCount)
         setItemSize(computedSize)
-        setHeight(Math.ceil(p.photos.length / columnCount) * (computedSize + 6) - 6 + 20 + 39)
+        setHeight(Math.ceil(p.photos.length / columnCount) * (computedSize + 6) - 6 + PADDING*2 + 39 + 1)
+        console.log({ width, columnCount, computedSize, height })
 
-        return observeIntersection(element.current, setClose, '0px')
+        return observeIntersection(element.current, setClose)
     }, [p.photos.length, p.itemMinSize])
 
-    return <div key={p.sectionKey} ref={element} style={{ padding: 10, height: close ? undefined : height, overflow: 'hidden', width: '100%' }}>
+    return <div key={p.sectionKey} ref={element} style={{ padding: `${PADDING}px`, height: height, overflow: 'hidden', width: '100%' }}>
         {close && <>
             <div style={{ display: 'flex', alignItems: 'center', fontSize: '21px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-muted)', paddingLeft: '5px', lineHeight: 1 }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1, padding: '6px' }}>{p.sectionKey}</span>
@@ -118,8 +122,8 @@ export function PhotoSection(p: PhotoSectionProps) {
                 })()}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-                {chunkPhotos(p.photos, Math.max(1, columns)).map((row, rowIndex) => (
-                    <PhotoRow key={`${p.sectionKey}-row-${rowIndex}`} itemSize={itemSize}>
+                {chunkPhotos(p.photos, Math.max(1, columns)).map((row, rowIndex, array) => (
+                    <PhotoRow key={`${p.sectionKey}-row-${rowIndex}`} itemSize={itemSize} observe={array.length > 2 || true}>
                         {row.map(photo => {
                             const photoKey = photo.key
                             const selected = p.selectedIds?.has(photoKey) ?? false
@@ -136,6 +140,7 @@ export function PhotoSection(p: PhotoSectionProps) {
                                         onRemovePhoto={p.onRemovePhoto}
                                         selected={selected}
                                         disabled={disabled}
+                                        loading={'lazy'}
                                         onSelect={p.onToggleSelect}
                                     />
                                 </div>

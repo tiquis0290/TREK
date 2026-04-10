@@ -13,7 +13,7 @@ export function getScrollableParent(node: HTMLElement | null): HTMLElement | nul
 export function observeIntersection(
     element: Element | null,
     callback: (visible: boolean) => void,
-    rootMargin?: string
+    margin?: number
 ): () => void {
     if (!element || typeof IntersectionObserver === 'undefined') {
         callback(true)
@@ -22,15 +22,14 @@ export function observeIntersection(
 
     const scrollParent = getScrollableParent(element instanceof HTMLElement ? element : element.parentElement)
     const root = scrollParent || null
-    const rootHeight = window.innerHeight
-    const actualRootMargin = rootMargin !== undefined ? rootMargin : (root ? `${rootHeight}px` : '0px')
+    const rootMargin = `${margin || window.innerHeight}px`
 
     const observer = new IntersectionObserver(
         entries => {
             const visible = entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0)
             callback(visible)
         },
-        { root, rootMargin: actualRootMargin }
+        { root, rootMargin }
     )
 
     observer.observe(element)

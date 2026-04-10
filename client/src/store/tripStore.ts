@@ -51,6 +51,7 @@ export interface TripStoreState
   selectedDayId: number | null
   isLoading: boolean
   error: string | null
+  photoThumbnailCache: Record<string, string>
 
   setSelectedDay: (dayId: number | null) => void
   handleRemoteEvent: (event: WebSocketEvent) => void
@@ -59,6 +60,8 @@ export interface TripStoreState
   updateTrip: (tripId: number | string, data: Partial<Trip>) => Promise<Trip>
   addTag: (data: Partial<Tag>) => Promise<Tag>
   addCategory: (data: Partial<Category>) => Promise<Category>
+  setPhotoThumbnail: (baseUrl: string, objectUrl: string) => void
+  clearPhotoThumbnailCache: () => void
 }
 
 export const useTripStore = create<TripStoreState>((set, get) => ({
@@ -86,6 +89,7 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
   selectedDayId: null,
   isLoading: false,
   error: null,
+  photoThumbnailCache: {},
 
   setSelectedDay: (dayId: number | null) => set({ selectedDayId: dayId }),
 
@@ -182,6 +186,11 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
       throw new Error(getApiErrorMessage(err, 'Error creating category'))
     }
   },
+
+  setPhotoThumbnail: (baseUrl, objectUrl) => set((state) => ({
+    photoThumbnailCache: { ...state.photoThumbnailCache, [baseUrl]: objectUrl },
+  })),
+  clearPhotoThumbnailCache: () => set({ photoThumbnailCache: {} }),
 
   ...createPlacesSlice(set, get),
   ...createAssignmentsSlice(set, get),

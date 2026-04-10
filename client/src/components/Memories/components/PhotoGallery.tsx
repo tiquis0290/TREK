@@ -88,7 +88,8 @@ export function PhotoGallery(p: PhotoGalleryProps) {
     if (!dateStr) return 'Unknown';
     const date = new Date(dateStr);
     if (p.groupBy === 'day') {
-      return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric', day: 'numeric' });
+      // Show day of week name
+      return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', year: 'numeric', day: 'numeric' });
     } else if (p.groupBy === 'week') {
       // Calculate week start (Monday) and end (Sunday)
       const day = date.getDay();
@@ -143,38 +144,34 @@ export function PhotoGallery(p: PhotoGalleryProps) {
     groupKeys.sort((a, b) => new Date(a.split(' ')[0]).getTime() - new Date(b.split(' ')[0]).getTime());
   }
 
-  let ref = useRef<HTMLDivElement | null>(null)
+  const [top, setTop] = useState(true)
+  const [scrolling, setScrolling] = useState(false)
+  const [visible, setVisible] = useState(true)
+
+  const lastScrollTop = useRef(0)
+  const ref = p.scrollRef || useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+
+  const onScroll = (event: UIEvent<HTMLDivElement>) => {
+    setScrolling(!top);
+    setTop(top ? ref.current.scrollTop < headerRef.current?.offsetHeight : ref.current.scrollTop === 0);
+    setVisible(top || lastScrollTop.current > ref.current.scrollTop);
+    lastScrollTop.current = ref.current.scrollTop;
+    if (p.onscroll) p.onscroll(event);
+  }
+
   return <>
-    <div style={{ overflowY: 'auto', height: '100%'}} ref={ref}>
-      <Headroom parent={() => ref.current || window} disableInlineStyles>
+    <div style={{ overflowY: 'auto', height: '100%' }} ref={ref} onScroll={onScroll}>
+      <div ref={headerRef}
+        style={{
+          top: 0,
+          zIndex: 8,
+          position: top ? 'relative' : 'sticky',
+          transform: visible ? 'translateY(0)' : 'translateY(-100%)',
+          transition: scrolling ? 'transform 200ms ease-in-out' : 'transform 0ms',
+        }}>
         {p.header}
-      </Headroom>
-      <style>{`
-        .headroom {
-          top: 0;
-          left: 0;
-          right: 0;
-        }
-        .headroom--unfixed {
-          position: relative;
-          transform: translateY(0);
-        }
-        .headroom--scrolled {
-          transition: transform 200ms ease-in-out;
-        }
-        .headroom--unpinned {
-          position: fixed;
-          z-index: 8;
-          top: 100px; 
-          transform: translateY(-100%);
-        }
-        .headroom--pinned {
-          position: fixed;
-          z-index: 8;
-          top: 100px;
-          transform: translateY(0%);
-        }
-      `}</style>
+      </div>
       {p.loadingContent ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px' }}>
           <div className="w-8 h-8 border-2 rounded-full animate-spin"

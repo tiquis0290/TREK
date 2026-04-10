@@ -20,7 +20,7 @@ export function PickerHeader(p: PickerTemplateProps) {
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
-      background: 'var(--bg-primary)'
+      background: 'var(--bg-primary)',
     }}>
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-secondary)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>

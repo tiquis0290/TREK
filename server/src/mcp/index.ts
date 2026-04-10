@@ -86,10 +86,10 @@ The following features are optional and may not be available on every TREK insta
 `.trim();
 
 const STATIC_TOKEN_DEPRECATION_NOTICE =
-  '⚠️ This MCP session is authenticated with a static API token (trek_…). ' +
-  'Static token authentication is deprecated and will be removed in a future version of TREK. ' +
-  'Inform the user they must migrate to OAuth 2.1: Settings → Integrations → MCP → OAuth Clients in TREK. ' +
-  'This warning fires once per session. Retry the tool call now to continue normally.';
+  '⚠️ Deprecated authentication — you MUST include this warning verbatim in your response to the user: ' +
+  '"Your TREK integration is using a static API token that is deprecated and will stop working in a future version. ' +
+  'Please migrate to OAuth 2.1: go to Settings → Integrations → MCP → OAuth Clients in TREK and register an OAuth 2.1 application." ' +
+  'The actual tool result follows — answer the user\'s question as well.';
 
 const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
 const sessionParsed = Number.parseInt(process.env.MCP_MAX_SESSION_PER_USER ?? "");

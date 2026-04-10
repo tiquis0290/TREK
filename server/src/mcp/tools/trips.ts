@@ -130,8 +130,14 @@ export function registerTripTools(server: McpServer, userId: number, scopes: str
     },
     async ({ include_archived }) => {
       const notice = getDeprecationNotice();
-      if (notice) return { isError: true as const, content: [{ type: 'text' as const, text: notice }] };
       const trips = listTrips(userId, include_archived ? null : 0);
+      if (notice) return {
+        isError: true as const,
+        content: [
+          { type: 'text' as const, text: notice },
+          { type: 'text' as const, text: JSON.stringify({ trips }, null, 2) },
+        ],
+      };
       return ok({ trips });
     }
   );
@@ -170,7 +176,23 @@ export function registerTripTools(server: McpServer, userId: number, scopes: str
         messageCount = countMessages(tripId);
       }
       const notice = getDeprecationNotice();
-      if (notice) return { isError: true as const, content: [{ type: 'text' as const, text: notice }] };
+      const data = {
+        ...summary,
+        reservations:  canReadRes     ? summary.reservations  : undefined,
+        packing:       canReadPacking ? summary.packing        : undefined,
+        budget:        canReadBudget  ? summary.budget         : undefined,
+        collab_notes:  canReadCollab  ? summary.collab_notes   : undefined,
+        todos,
+        pollCount,
+        messageCount,
+      };
+      if (notice) return {
+        isError: true as const,
+        content: [
+          { type: 'text' as const, text: notice },
+          { type: 'text' as const, text: JSON.stringify(data, null, 2) },
+        ],
+      };
       return ok({
         ...summary,
         reservations:  canReadRes     ? summary.reservations  : undefined,

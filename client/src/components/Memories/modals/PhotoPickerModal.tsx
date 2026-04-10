@@ -26,7 +26,7 @@ interface PhotoPickerModalProps {
 }
 
 export function PhotoPickerModal(p: PhotoPickerModalProps) {
-  const PAGE_SIZE = 1000
+  const PAGE_SIZE = 400
   const { t } = useTranslation()
   const toast = useToast()
   const [pickerLoading, setPickerLoading] = useState(false)
@@ -38,6 +38,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showConfirmShare, setShowConfirmShare] = useState(false)
 
+  const groupedByProvider = useRef(new Map<string, Asset[]>())
   const mountedRef = useRef(true)
 
   const controllerRef = useRef<AbortController | null>(null)
@@ -63,21 +64,23 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
     if (append) setPickerLoadingMore(true)
     else setPickerLoading(true)
 
+    const requestController = new AbortController()
+    controllerRef.current = requestController
+
     try {
-      const newController = new AbortController()
-      controllerRef.current = newController
       const res = await apiClient.post(
         buildProviderMemoriesUrl(p.tripId, p.selectedProvider, 'search'),
         {
-        from: p.pickerDateFilter && p.startDate ? p.startDate : undefined,
-        to: p.pickerDateFilter && p.endDate ? p.endDate : undefined,
-        offset,
-        limit: PAGE_SIZE,
+          from: p.pickerDateFilter && p.startDate ? p.startDate : undefined,
+          to: p.pickerDateFilter && p.endDate ? p.endDate : undefined,
+          offset,
+          limit: PAGE_SIZE,
         },
-        { signal: newController.signal }
+        { signal: requestController.signal }
       )
 
       if (!mountedRef.current) return
+      if (controllerRef.current !== requestController) return
       const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: p.selectedProvider }))
       setPickerPhotos(prev => append ? [...prev, ...incoming] : incoming)
       setPickerOffset(offset + incoming.length)
@@ -85,6 +88,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       setPickerLoadError(false)
     } catch (error) {
       if (!mountedRef.current) return
+      if (controllerRef.current !== requestController) return
       if (isCanceledLoadError(error)) return
       if (!append) {
         setPickerPhotos([])
@@ -95,6 +99,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       toast.error(t('memories.error.loadPhotos'))
     } finally {
       if (!mountedRef.current) return
+      if (controllerRef.current !== requestController) return
       if (append) setPickerLoadingMore(false)
       else setPickerLoading(false)
     }
@@ -103,6 +108,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   useEffect(() => {
     mountedRef.current = true
     setPickerPhotos([])
+    setPickerLoading(true)
     loadPickerPhotos(0, false)
     return () => {
       mountedRef.current = false
@@ -110,7 +116,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   }, [p.selectedProvider, p.pickerDateFilter, p.startDate, p.endDate, p.tripId])
 
   const loadMorePickerPhotos = async () => {
-    if (!p.selectedProvider || pickerLoading || pickerLoadingMore || !pickerHasMore ) return
+    if (!p.selectedProvider || pickerLoading || pickerLoadingMore || !pickerHasMore) return
 
     await loadPickerPhotos(pickerOffset, true)
   }
@@ -159,6 +165,15 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
 
   const currentUserId = p.currentUserId ?? 0
   const makePickerKey = (tripId: number, userId: number, provider: string, assetId: string): string => `${tripId}::${userId}::${provider}::${assetId}`
+  const splitPickerKey = (key: string): { tripId: number; userId: number; provider: string; assetId: string } | null => {
+    const parts = key.split('::')
+    if (parts.length !== 4) return null
+    const [tripIdStr, userIdStr, provider, assetId] = parts
+    const tripId = parseInt(tripIdStr, 10)
+    const userId = parseInt(userIdStr, 10)
+    if (isNaN(tripId) || isNaN(userId)) return null
+    return { tripId, userId, provider, assetId }
+  }
 
   const alreadyAdded = new Set(
     p.tripPhotos
@@ -169,8 +184,15 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const onTogglePickerSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(id)) {
+        const { provider, assetId } = splitPickerKey(id)!
+        groupedByProvider.current.set(provider, groupedByProvider.current.get(provider)?.filter(a => a.id !== assetId) || [])
+        next.delete(id)
+      } else {
+        const asset = pickerPhotos.find(a => makePickerKey(p.tripId, currentUserId, a.provider, a.id) === id)
+        groupedByProvider.current.set(asset.provider, [...(groupedByProvider.current.get(asset.provider) || []), asset])
+        next.add(id)
+      }
       return next
     })
   }
@@ -196,17 +218,8 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const executeAddPhotos = async () => {
     setShowConfirmShare(false)
     try {
-      const assetsByKey = new Map(pickerPhotos.map(asset => [makePickerKey(p.tripId, currentUserId, asset.provider, asset.id), asset]))
-      const groupedByProvider = new Map<string, Asset[]>()
-      for (const key of selectedIds) {
-        const asset = assetsByKey.get(key)
-        if (!asset) continue
-        const list = groupedByProvider.get(asset.provider) || []
-        list.push(asset)
-        groupedByProvider.set(asset.provider, list)
-      }
 
-      const selections = [...groupedByProvider.entries()].map(([provider, assets]) => ({
+      const selections = [...groupedByProvider.current.entries()].map(([provider, assets]) => ({
         provider,
         asset_ids: assets.map(asset => asset.id),
         assets: assets,

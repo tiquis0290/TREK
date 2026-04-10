@@ -108,12 +108,12 @@ export const createMemoriesSlice = (set: SetState, get: GetState): MemoriesSlice
       set({ isOffline: true })
     } finally {
       set({ loading: false })
+      set({ loadingContent: true })
       await get().loadContent(tripId)
     }
   },
 
   loadContent: async (tripId) => {
-    set({ loadingContent: true })
     try {
       await Promise.all([
         get().loadPhotos(tripId),

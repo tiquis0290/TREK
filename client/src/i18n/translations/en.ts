@@ -1467,7 +1467,7 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'memories.filter.month': 'Month',
   'memories.filter.year': 'Year',
   'memories.tryAgain': 'Try again',
-  'memories.albumShare': 'Album shared',
+  'memories.albumLinked': 'Album shared',
 
 
   // Collab Addon

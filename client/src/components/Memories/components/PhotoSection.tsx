@@ -4,6 +4,7 @@ import { useTranslation } from "../../../i18n"
 import { TripPhoto } from "../types"
 import { User } from "../../../types"
 import { ReactNode, useEffect, useRef, useState } from "react"
+import { getScrollableParent, observeIntersection } from "./intersectionHelpers"
 
 
 interface PhotoSectionProps {
@@ -31,52 +32,11 @@ function chunkPhotos<T>(items: T[], size: number): T[][] {
 }
 
 function PhotoRow({ children, itemSize }: { children: ReactNode, itemSize: number }) {
-    
     const element = useRef<HTMLDivElement | null>(null)
-    const [close, setClose] = useState(false)
+    const [visible, setVisible] = useState(false)
 
     useEffect(() => {
-        let observer: IntersectionObserver | null = null
-        if (!element.current || typeof IntersectionObserver === 'undefined') {
-            setClose(true)
-        } else {
-            
-            function getScrollableParent(node: HTMLElement | null): HTMLElement | null {
-                while (node) {
-                    const style = window.getComputedStyle(node)
-                    const overflowY = style.overflowY
-                    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
-                        return node
-                    }
-                    node = node.parentElement
-                }
-                return null
-            }
-            
-            const scrollParent = getScrollableParent(element.current)
-
-            const root = scrollParent || null
-            const rootHeight = scrollParent ? scrollParent.clientHeight : window.innerHeight
-            observer = new IntersectionObserver(
-                entries => {
-                    const visible = entries.some(entry => { console.log(entry.intersectionRatio); return entry.isIntersecting || entry.intersectionRatio > 0 })
-                    if (visible) {
-                        setClose(true)
-                    } else {
-                        setClose(false)
-                    }
-                },
-                { root: root, rootMargin: `${rootHeight}px` }
-            )
-            observer.observe(element.current)
-        }
-
-        return () => {
-            if (observer) {
-                observer.disconnect()
-            }
-        }
-
+        return observeIntersection(element.current, setVisible)
     }, [children])
 
     return (
@@ -84,72 +44,43 @@ function PhotoRow({ children, itemSize }: { children: ReactNode, itemSize: numbe
             ref={element}
             style={{
                 width: '100%',
-                height: close ? '100%' : itemSize,
+                height: visible ? 'auto' : itemSize,
                 display: 'flex',
                 gap: 6,
+                marginBottom: 6,
+                overflow: 'hidden',
             }}
         >
-            {close && children}
+            {visible && children}
         </div>
     )
 }
 
 export function PhotoSection(p: PhotoSectionProps) {
     
-    const width = window.innerWidth - 20 + 6
-    const columns = Math.floor(width / ((p.itemMinSize ?? 160) + 6))
-    const itemSize = (width - columns * 6) / columns
-    const height = Math.ceil(p.photos.length / columns) * (itemSize + 6) - 6 + 20 + 39
-    
     const { t } = useTranslation()
-    
     const element = useRef<HTMLDivElement | null>(null)
-    const [close, setClose] = useState(false)
+    const [close, setClose] = useState(true)
+    const [columns, setColumns] = useState(1)
+    const [itemSize, setItemSize] = useState(p.itemMinSize ?? 160)
+    const [height, setHeight] = useState(0)
 
     useEffect(() => {
-        let observer: IntersectionObserver | null = null
         if (!element.current || typeof IntersectionObserver === 'undefined') {
             setClose(true)
-        } else {
-            
-            function getScrollableParent(node: HTMLElement | null): HTMLElement | null {
-                while (node) {
-                    const style = window.getComputedStyle(node)
-                    const overflowY = style.overflowY
-                    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
-                        return node
-                    }
-                    node = node.parentElement
-                }
-                return null
-            }
-            
-            const scrollParent = getScrollableParent(element.current)
-
-            const root = scrollParent || null
-            const rootHeight = scrollParent ? scrollParent.clientHeight : window.innerHeight
-            observer = new IntersectionObserver(
-                entries => {
-                    const visible = entries.some(entry => { console.log(entry.intersectionRatio); return entry.isIntersecting || entry.intersectionRatio > 0 })
-                    if (visible) {
-                        console.log('true', p.sectionKey)
-                        setClose(true)
-                    } else {
-                        console.log('false', p.sectionKey)
-                        setClose(false)
-                    }
-                },
-                { root: root, rootMargin: `${rootHeight}px` }
-            )
-            observer.observe(element.current)
+            return
         }
 
-        return () => {
-            if (observer) {
-                observer.disconnect()
-            }
-        }
+        const scrollParent = getScrollableParent(element.current)
+        const width = (scrollParent?.clientWidth ?? window.innerWidth) - 14
+        const columnCount = Math.max(1, Math.floor(width / ((p.itemMinSize ?? 160) + 6)))
+        const computedSize = (width - columnCount * 6) / columnCount
 
+        setColumns(columnCount)
+        setItemSize(computedSize)
+        setHeight(Math.ceil(p.photos.length / columnCount) * (computedSize + 6) - 6 + 20 + 39)
+
+        return observeIntersection(element.current, setClose, '0px')
     }, [p.photos.length, p.itemMinSize])
 
     return <div key={p.sectionKey} ref={element} style={{ padding: 10, height: close ? undefined : height, overflow: 'hidden', width: '100%' }}>
@@ -187,14 +118,14 @@ export function PhotoSection(p: PhotoSectionProps) {
                 })()}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-                {chunkPhotos(p.photos, columns).map((row, rowIndex) => (
+                {chunkPhotos(p.photos, Math.max(1, columns)).map((row, rowIndex) => (
                     <PhotoRow key={`${p.sectionKey}-row-${rowIndex}`} itemSize={itemSize}>
                         {row.map(photo => {
                             const photoKey = photo.key
                             const selected = p.selectedIds?.has(photoKey) ?? false
                             const disabled = p.disabledIds?.has(photoKey) ?? false
                             return (
-                                <div key={photoKey} style={{ width: itemSize, height: itemSize }}>
+                                <div key={photoKey} style={{ flex: `0 0 ${itemSize}px`, width: itemSize, height: itemSize }}>
                                     <PhotoElement
                                         keyId={photoKey}
                                         photo={photo}

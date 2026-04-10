@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchImageAsBlob } from '../../../api/authUrl'
+import { observeIntersection } from './intersectionHelpers'
 
 interface ProviderImgProps {
   baseUrl: string
@@ -13,9 +14,9 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
 
   useEffect(() => {
     let revoke = ''
-    let observer: IntersectionObserver | null = null
     let controller = new AbortController()
     let loadingPending = false
+    let cleanupObserver = () => {}
 
     const cleanup = () => {
       if (revoke) {
@@ -96,47 +97,25 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
       }
     }
 
-    if (loading === 'eager' || true) {
+    if (loading === 'eager') {
       loadImage()
     } else {
       const element = wrapperRef.current
       if (!element || typeof IntersectionObserver === 'undefined') {
         loadImage()
       } else {
-        function getScrollableParent(node: HTMLElement | null): HTMLElement | null {
-          while (node) {
-            const style = window.getComputedStyle(node)
-            const overflowY = style.overflowY
-            if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
-              return node
-            }
-            node = node.parentElement
+        cleanupObserver = observeIntersection(element, visible => {
+          if (visible) {
+            loadImage()
+          } else if (loadingPending) {
+            controller.abort()
           }
-          return null
-        }
-
-        const scrollParent = getScrollableParent(element)
-        const root = scrollParent || null
-        const rootHeight = scrollParent ? scrollParent.clientHeight : window.innerHeight
-        observer = new IntersectionObserver(
-          entries => {
-            const visible = entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0)
-            if (visible) {
-              loadImage()
-            } else if (loadingPending) {
-              controller.abort()
-            }
-          },
-          { root: root, rootMargin: `${rootHeight}px` }
-        )
-        observer.observe(element)
+        })
       }
     }
 
     return () => {
-      if (observer) {
-        observer.disconnect()
-      }
+      cleanupObserver()
       controller.abort()
       cleanup()
     }

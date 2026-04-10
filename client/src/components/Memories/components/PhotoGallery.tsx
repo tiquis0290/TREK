@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type MutableRefObject, type ReactNode, type UIEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type UIEvent } from 'react'
 import { Camera, Plus } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import apiClient from '../../../api/client'
@@ -8,11 +8,12 @@ import { PhotoSection } from './PhotoSection'
 import { TripPhoto } from '../utils/types'
 import { buildUnifiedMemoriesUrl } from '../utils/urlBuilders'
 import { getPhotoTimestamp, getGroupLabel } from '../utils/dateGrouping'
+import useOverlay from '../../shared/Overlay'
+import { MemoriesLightbox } from '../modals/MemoriesLightbox'
 
 interface PhotoGalleryProps {
   allVisible: TripPhoto[]
   currentUser: User | null
-  openLightbox: (photo: TripPhoto) => void
   openPicker: () => void
   setTripPhotos: React.Dispatch<React.SetStateAction<TripPhoto[]>>
   tripId: number
@@ -39,6 +40,20 @@ interface PhotoGalleryProps {
 export function PhotoGallery(p: PhotoGalleryProps) {
   const { t } = useTranslation()
   const toast = useToast()
+  const overlay = useOverlay()
+
+  // ── Lightbox ─────────────────────────────────────────────────────────────
+
+   const [lightboxPhoto, setLightboxPhoto] = useState<TripPhoto | null>(null)
+
+  useEffect(() => {
+    overlay.show(lightboxPhoto ? <MemoriesLightbox
+        allVisible={p.allVisible}
+        tripId={p.tripId}
+        initialPhoto={lightboxPhoto}
+        onClose={() => setLightboxPhoto(null)}
+      />: null)
+  }, [overlay, lightboxPhoto, p.allVisible, p.tripId])
 
   // ── Remove photo ──────────────────────────────────────────────────────────
 
@@ -173,7 +188,7 @@ export function PhotoGallery(p: PhotoGalleryProps) {
               onToggleSelectGroup={p.onToggleSelectGroup}
               tripId={p.tripId}
               currentUser={p.currentUser}
-              openLightbox={p.openLightbox}
+              openLightbox={setLightboxPhoto}
               itemMinSize={p.itemMinSize}
               onToggleSharing={toggleSharing}
               onRemovePhoto={removePhoto}

@@ -18,7 +18,6 @@ import { useOverlay } from '../shared/Overlay.tsx'
 
 export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPanelProps) {
   const { t } = useTranslation()
-  const overlay = useOverlay()
   const toast = useToast()
   const currentUser = useAuthStore(s => s.user)
   const [showPicker, setShowPicker] = useState(false)
@@ -26,7 +25,6 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [locationFilter, setLocationFilter] = useState('')
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('day')
   const [showAlbumPicker, setShowAlbumPicker] = useState(false)
-  const [lightboxPhoto, setLightboxPhoto] = useState<TripPhoto | null>(null)
   const [pickerDateFilter, setPickerDateFilter] = useState(true)
 
   const {
@@ -113,16 +111,6 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   })
 
   // ── Init ──────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    overlay.show(lightboxPhoto ? <MemoriesLightbox
-        allVisible={allVisible}
-        tripId={tripId}
-        initialPhoto={lightboxPhoto}
-        onClose={() => setLightboxPhoto(null)}
-      />: null)
-  }, [overlay, lightboxPhoto, allVisible, tripId])
-
 
   useEffect(() => {
     loadInitial(tripId)
@@ -222,7 +210,6 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       currentUserId={currentUser?.id}
       tripId={tripId}
       onAdded={async () => {
-        setLightboxPhoto(null)
         setShowPicker(false)
         clearImageQueue()
         await loadContent(tripId)
@@ -240,7 +227,6 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       <PhotoGallery
         allVisible={allVisible}
         currentUser={currentUser}
-        openLightbox={setLightboxPhoto}
         openPicker={openPicker}
         setTripPhotos={setTripPhotos}
         tripId={tripId}

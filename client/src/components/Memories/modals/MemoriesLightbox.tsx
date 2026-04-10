@@ -80,8 +80,8 @@ export function MemoriesLightbox({
         const controller = new AbortController()
         pendingImageControllers.current[key] = controller
         pendingImageFetches.current[key] = fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, photo, 'preview'), controller.signal)
-          .then(blobUrl => {
-            if (blobUrl && validateImageUrl(blobUrl, controller.signal)) imageCacheRef.current[key] = blobUrl
+          .then(async blobUrl => {
+            if (blobUrl && await validateImageUrl(blobUrl, controller.signal)) imageCacheRef.current[key] = blobUrl
             else if (blobUrl) URL.revokeObjectURL(blobUrl)
             const newIndex = index + direction
             const nextPhoto = allVisible[newIndex]
@@ -167,8 +167,8 @@ export function MemoriesLightbox({
         const controller = new AbortController()
         pendingImageControllers.current[key] = controller
         pendingImageFetches.current[key] = fetchImageAsBlob('/api' + buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'preview'), controller.signal)
-          .then(blobUrl => {
-            if (blobUrl && validateImageUrl(blobUrl, controller.signal)) imageCacheRef.current[key] = blobUrl
+          .then(async blobUrl => {
+            if (blobUrl && await validateImageUrl(blobUrl, controller.signal)) imageCacheRef.current[key] = blobUrl
             else if (blobUrl) URL.revokeObjectURL(blobUrl)
           })
           .catch(() => undefined)

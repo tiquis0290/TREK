@@ -240,7 +240,6 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
     <PhotoGallery
       allVisible={pickerTripPhotos}
       currentUser={p.currentUserId ? { id: p.currentUserId } as any : null}
-      openLightbox={(_photo: TripPhoto) => { }}
       openPicker={() => { }}
       setTripPhotos={(_value) => { }}
       tripId={p.tripId}

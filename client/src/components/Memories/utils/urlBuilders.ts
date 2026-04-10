@@ -1,4 +1,4 @@
-import type { TripPhoto } from './utils/types'
+import type { TripPhoto } from './types'
 
 const MEMORIES_ADDON_PREFIX = '/integrations/memories'
 

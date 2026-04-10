@@ -1,19 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { fetchImageAsBlob } from '../../../api/authUrl'
 import { useTripStore } from '../../../store/tripStore'
-import { observeIntersection } from './intersectionHelpers'
+import { observeIntersection } from '../utils/intersectionHelpers'
+
+const MAX_RETRIES = 2
 
 interface ProviderImgProps {
   baseUrl: string
-  style?: React.CSSProperties
+  style?: CSSProperties
   loading?: 'lazy' | 'eager'
 }
 
 export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgProps) {
-  const cachedThumbnail = useTripStore((state) => state.photoThumbnailCache[baseUrl] || '')
-  const setPhotoThumbnail = useTripStore((state) => state.setPhotoThumbnail)
+  const cachedThumbnail = useTripStore(state => state.photoThumbnailCache[baseUrl] || '')
+  const setPhotoThumbnail = useTripStore(state => state.setPhotoThumbnail)
   const [src, setSrc] = useState(cachedThumbnail)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    setSrc(cachedThumbnail)
+  }, [cachedThumbnail, baseUrl])
 
   const validateImageUrl = (url: string, signal: AbortSignal): Promise<boolean> => {
     return new Promise<boolean>(resolve => {
@@ -50,13 +57,10 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
   }
 
   useEffect(() => {
-    let revoke = ''
     let controller = new AbortController()
-    let loadingPending = false
-    let cleanupObserver = () => { }
-
-    const cleanup = () => {
-    }
+    let isLoading = false
+    let stopObserving = () => {}
+    let isMounted = true
 
     const ensureController = () => {
       if (controller.signal.aborted) {
@@ -64,11 +68,11 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
       }
     }
 
-
-    const loadImage = async (n: number) => {
-      if (loadingPending) return
+    const loadImage = async (retriesLeft: number) => {
+      if (isLoading || !isMounted) return
       ensureController()
-      loadingPending = true
+      isLoading = true
+
       try {
         if (controller.signal.aborted) return
 
@@ -76,44 +80,49 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
         if (!blobUrl) {
           blobUrl = await fetchImageAsBlob('/api' + baseUrl, controller.signal)
           if (!blobUrl) {
-            loadingPending = false
             return
           }
+
           if (controller.signal.aborted) {
             URL.revokeObjectURL(blobUrl)
-            loadingPending = false
             return
           }
         }
+
         const valid = await validateImageUrl(blobUrl, controller.signal)
         if (valid) {
-          revoke = blobUrl
-          loadingPending = false
+          if (!isMounted) {
+            URL.revokeObjectURL(blobUrl)
+            return
+          }
           setPhotoThumbnail(baseUrl, blobUrl)
           setSrc(blobUrl)
           return
         }
+
         URL.revokeObjectURL(blobUrl)
-      } finally {
         setPhotoThumbnail(baseUrl, undefined)
-        if (n > 0) {
-          loadImage(n - 1)
-        } else {
-          loadingPending = false
+
+        if (retriesLeft > 0 && !controller.signal.aborted) {
+          isLoading = false
+          await loadImage(retriesLeft - 1)
         }
+      } finally {
+        isLoading = false
       }
     }
+
     if (loading === 'eager') {
-      loadImage(2)
+      loadImage(MAX_RETRIES)
     } else {
       const element = wrapperRef.current
       if (!element || typeof IntersectionObserver === 'undefined') {
-        loadImage(2)
+        loadImage(MAX_RETRIES)
       } else {
-        cleanupObserver = observeIntersection(element, visible => {
+        stopObserving = observeIntersection(element, visible => {
           if (visible) {
-            loadImage(2)
-          } else if (loadingPending) {
+            loadImage(MAX_RETRIES)
+          } else if (isLoading) {
             controller.abort()
           }
         })
@@ -121,22 +130,23 @@ export function ProviderImg({ baseUrl, style, loading = 'lazy' }: ProviderImgPro
     }
 
     return () => {
-      cleanupObserver()
+      isMounted = false
+      stopObserving()
       controller.abort()
-      cleanup()
     }
-  }, [baseUrl, loading, src])
+  }, [baseUrl, cachedThumbnail, loading, setPhotoThumbnail])
 
   return (
     <div
       ref={wrapperRef}
       style={{
         background: '#e0e0e0',
+        overflow: 'hidden',
         minHeight: style?.height ? undefined : 200,
         ...style,
       }}
     >
-      {src && <img src={src} alt="" loading={loading} style={style} />}
+      {src && <img src={src} alt="" loading={loading} style={style}/>}
     </div>
   )
 }

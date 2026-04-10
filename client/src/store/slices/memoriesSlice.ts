@@ -1,8 +1,8 @@
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
 import apiClient, { addonsApi } from '../../api/client'
-import { buildProviderMemoriesUrl, buildUnifiedMemoriesUrl } from '../../components/Memories/urlBuilders'
-import type { AlbumLink, PhotoProvider, TripPhoto } from '../../components/Memories/types'
+import { buildProviderMemoriesUrl, buildUnifiedMemoriesUrl } from '../../components/Memories/utils/urlBuilders'
+import type { AlbumLink, PhotoProvider, TripPhoto } from '../../components/Memories/utils/types'
 
 type SetState = StoreApi<TripStoreState>['setState']
 type GetState = StoreApi<TripStoreState>['getState']

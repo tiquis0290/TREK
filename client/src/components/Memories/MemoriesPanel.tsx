@@ -5,14 +5,13 @@ import { useTripStore } from '../../store/tripStore'
 import { useTranslation } from '../../i18n'
 import { clearImageQueue } from '../../api/authUrl'
 import { useToast } from '../shared/Toast'
-import { AlbumPickerModal } from './components/AlbumPickerModal'
-import { PhotoPickerModal } from './components/PhotoPickerModal'
-import { MemoriesLightbox } from './components/MemoriesLightbox'
-import { deriveVisibleMemories } from './selectors'
-import type { TripPhoto, MemoriesPanelProps } from './types'
+import { AlbumPickerModal } from './modals/AlbumPickerModal.tsx'
+import { PhotoPickerModal } from './modals/PhotoPickerModal.tsx'
+import { MemoriesLightbox } from './modals/MemoriesLightbox.tsx'
+import { deriveVisibleMemories } from './utils/selectors.ts'
+import type { TripPhoto, MemoriesPanelProps } from './utils/types.ts'
 import { PhotoGallery } from './components/PhotoGallery'
 import { MemoriesHeader } from './components/MemoriesHeader.tsx'
-import { useState as useReactState } from 'react';
 import { useOverlay } from '../shared/Overlay.tsx'
 
 // ── Main Component ──────────────────────────────────────────────────────────
@@ -22,6 +21,13 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const overlay = useOverlay()
   const toast = useToast()
   const currentUser = useAuthStore(s => s.user)
+  const [showPicker, setShowPicker] = useState(false)
+  const [sortAsc, setSortAsc] = useState(true)
+  const [locationFilter, setLocationFilter] = useState('')
+  const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('day')
+  const [showAlbumPicker, setShowAlbumPicker] = useState(false)
+  const [lightboxPhoto, setLightboxPhoto] = useState<TripPhoto | null>(null)
+  const [pickerDateFilter, setPickerDateFilter] = useState(true)
 
   const {
     enabledProviders,
@@ -63,20 +69,11 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     setLoadingContent: s.setLoadingContent,
   }))
 
-  // Photo picker
-  const [showPicker, setShowPicker] = useState(false)
-
-  // Filters & sort
-  const [sortAsc, setSortAsc] = useState(true)
-  const [locationFilter, setLocationFilter] = useState('')
-  // Sorting/grouping for gallery
-  const [groupBy, setGroupBy] = useReactState<'day' | 'week' | 'month'>('day');
-
-  // Album linking
-  const [showAlbumPicker, setShowAlbumPicker] = useState(false)
-
-  // Lightbox
-  const [lightboxPhoto, setLightbox] = useState<TripPhoto | null>(null)
+  const withLoadingTransition = (update: () => void, delayMs = 16) => {
+    setLoadingContent(true)
+    update()
+    setTimeout(() => setLoadingContent(false), delayMs)
+  }
 
   const handleSyncAlbum = async (linkId: number, provider?: string) => {
     if (isOffline) {
@@ -106,6 +103,15 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     return await loadAlbumLinks(tripId)
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const { othersPhotos, allVisible, locations } = deriveVisibleMemories({
+    tripPhotos,
+    currentUserId: currentUser?.id,
+    locationFilter,
+    sortAsc,
+  })
+
   // ── Init ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -113,9 +119,9 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
         allVisible={allVisible}
         tripId={tripId}
         initialPhoto={lightboxPhoto}
-        onClose={() => setLightbox(null)}
+        onClose={() => setLightboxPhoto(null)}
       />: null)
-  }, [lightboxPhoto])
+  }, [overlay, lightboxPhoto, allVisible, tripId])
 
 
   useEffect(() => {
@@ -136,33 +142,21 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     }
   }, [tripId, currentUser?.id])
 
-
-  // ── Photo Picker ──────────────────────────────────────────────────────────
-
-  const [pickerDateFilter, setPickerDateFilter] = useState(true)
-
   const openPicker = () => {
-    clearImageQueue();
+    clearImageQueue()
     setPickerDateFilter(!!(startDate && endDate))
     setShowPicker(true)
   }
 
   // ── Album Picker ──────────────────────────────────────────────────────────
 
-  const openAlbumPicker = async () => {
-    clearImageQueue();
+  const openAlbumPicker = () => {
+    clearImageQueue()
     setShowAlbumPicker(true)
   }
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  const { othersPhotos, allVisible, locations } = deriveVisibleMemories({
-    tripPhotos,
-    currentUserId: currentUser?.id,
-    locationFilter,
-    sortAsc,
-  })
-
-  const font: React.CSSProperties = {
+  const panelFontStyle: React.CSSProperties = {
     fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif",
   }
 
@@ -173,7 +167,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', ...font }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', ...panelFontStyle }}>
         <div className="w-8 h-8 border-2 rounded-full animate-spin"
           style={{ borderColor: 'var(--border-primary)', borderTopColor: 'var(--text-primary)' }} />
       </div>
@@ -184,7 +178,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
   if (!connected && allVisible.length === 0) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '40px', textAlign: 'center', ...font }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '40px', textAlign: 'center', ...panelFontStyle }}>
         <Camera size={40} style={{ color: 'var(--text-faint)', marginBottom: 12 }} />
         <h3 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
           {t('memories.notConnected', { provider_name: enabledProviders.length === 1 ? enabledProviders[0]?.name : 'Photo provider' })}
@@ -198,7 +192,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
 
   if (showAlbumPicker) {
     return (
-      <div style={{ height: '100%', ...font }}>
+      <div style={{ height: '100%', ...panelFontStyle }}>
         <AlbumPickerModal
           availableProviders={availableProviders}
           tripId={tripId}
@@ -208,10 +202,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
           onReloadAlbumLinks={handleReloadAlbumLinks}
           onSyncAlbum={handleSyncAlbum}
           onClose={async () => {
-            setLoadingContent(true);
-            setShowAlbumPicker(false);
-            await new Promise<void>(resolve => setTimeout(resolve, 5));
-            setLoadingContent(false);
+            withLoadingTransition(() => setShowAlbumPicker(false), 5)
           }}
         />
       </div>
@@ -231,15 +222,13 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       currentUserId={currentUser?.id}
       tripId={tripId}
       onAdded={async () => {
+        setLightboxPhoto(null)
         setShowPicker(false)
         clearImageQueue()
         await loadContent(tripId)
       }}
       onClose={async () => {
-        setLoadingContent(true);
-        setShowPicker(false);
-        await new Promise<void>(resolve => setTimeout(resolve, 5));
-        setLoadingContent(false);
+        withLoadingTransition(() => setShowPicker(false), 5)
       }}
     />
   }
@@ -247,11 +236,11 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   // ── Main Gallery ──────────────────────────────────────────────────────────
 
   return (
-    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', ...font }}>
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', ...panelFontStyle }}>
       <PhotoGallery
         allVisible={allVisible}
         currentUser={currentUser}
-        openLightbox={setLightbox}
+        openLightbox={setLightboxPhoto}
         openPicker={openPicker}
         setTripPhotos={setTripPhotos}
         tripId={tripId}
@@ -268,25 +257,20 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
           othersCount={othersPhotos.length}
           sortAsc={sortAsc}
           onSortToggle={() => {
-            setLoadingContent(true)
-            setSortAsc(!sortAsc)
-            setTimeout(() => setLoadingContent(false), 16)
+            withLoadingTransition(() => setSortAsc(prev => !prev))
           }}
           groupBy={groupBy}
-          onGroupByChange={groupBy => {
-            setLoadingContent(true)
-            setGroupBy(groupBy)
-            setTimeout(() => setLoadingContent(false), 16)
+          onGroupByChange={nextGroupBy => {
+            withLoadingTransition(() => setGroupBy(nextGroupBy))
           }}
           locationFilter={locationFilter}
           onLocationFilterChange={value => {
-            setLoadingContent(true)
-            setLocationFilter(value)
-            setTimeout(() => setLoadingContent(false), 16)
+            withLoadingTransition(() => setLocationFilter(value))
           }}
           locations={locations}
         />}
         isOffline={isOffline}
+        canAddPhotos={true}
         loadingContent={loadingContent}
         groupBy={groupBy}
         sortOrder={sortAsc ? 'oldest' : 'newest'}

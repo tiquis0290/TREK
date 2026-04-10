@@ -1,8 +1,24 @@
 import { Eye, EyeOff, X, Check } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { useTranslation } from '../../../i18n'
 import { ProviderImg } from './ProviderImg'
-import type { TripPhoto } from '../types'
-import { buildProviderAssetMemoriesUrl } from '../urlBuilders'
+import type { TripPhoto } from '../utils/types'
+import { buildProviderAssetMemoriesUrl } from '../utils/urlBuilders'
+
+const HOVER_ICON_BUTTON_STYLE: CSSProperties = {
+  width: '26px',
+  height: '26px',
+  borderRadius: '50%',
+  border: 'none',
+  cursor: 'pointer',
+  background: 'rgba(0,0,0,0.5)',
+  backdropFilter: 'blur(4px)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+}
+
+const AVATAR_TOOLTIP_STYLE = '.memories-avatar:hover .memories-avatar-tooltip { opacity: 1 !important; }'
 
 interface PhotoElementProps {
   keyId: string
@@ -21,11 +37,12 @@ interface PhotoElementProps {
 export function PhotoElement(p: PhotoElementProps) {
   const { t } = useTranslation()
   const isOwn = p.photo.user_id === p.currentUserId
+  const isSelectionMode = !!p.onSelect
   const usernameInitial = (p.photo.username?.[0] || '?').toUpperCase()
 
   const handleClick = () => {
-    if (p.onSelect) {
-      if (!p.disabled && p.onSelect) p.onSelect(p.keyId)
+    if (isSelectionMode) {
+      if (!p.disabled) p.onSelect?.(p.keyId)
       return
     }
 
@@ -38,43 +55,49 @@ export function PhotoElement(p: PhotoElementProps) {
       style={{
         position: 'relative',
         aspectRatio: '1',
-        borderRadius: '8px',
         overflow: 'visible',
+        borderRadius: '10px',
         cursor: p.disabled ? 'default' : 'pointer',
         opacity: p.disabled ? 0.3 : 1,
-        outline: p.selected ? '3px solid var(--text-muted)' : 'none',
-        outlineOffset: p.selected ? '-3px' : undefined,
       }}
       onClick={handleClick}
     >
-      <ProviderImg
-        baseUrl={buildProviderAssetMemoriesUrl(p.tripId, p.photo, 'thumbnail')}
-        loading={p.loading || "lazy"}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }}
-      />
-
+      <div style={{
+          borderRadius: '10px', 
+          width: '100%',
+          height: '100%',
+          overflow: 'hidden',
+        }}>
+        <ProviderImg
+          baseUrl={buildProviderAssetMemoriesUrl(p.tripId, p.photo, 'thumbnail')}
+          loading={p.loading || 'lazy'}
+          style={{ width: '100%', height: '100%',
+             objectFit: 'cover',
+              outline: p.selected ? '4px solid var(--text-muted)' : 'none',
+            outlineOffset: '-3px',
+            borderRadius: '10px',
+          }}
+        />
+      </div>
 
       {p.selected && (
-        <>
-          <div
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              width: '24px',
-              height: '24px',
-              borderRadius: '50%',
-              background: 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 6,
-            }}
-          >
-            <Check size={14} color="var(--bg-primary)" />
-          </div>
-
-        </>
+        <div
+          style={{
+            position: 'absolute',
+            top: '4px',
+            right: '4px',
+            width: '24px',
+            height: '24px',
+            borderRadius: '50%',
+            background: 'var(--text-muted)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 6,
+          }}
+        >
+          <Check size={14} color="var(--bg-primary)" />
+        </div>
       )}
       {p.disabled && (
         <div
@@ -112,11 +135,10 @@ export function PhotoElement(p: PhotoElementProps) {
             textTransform: 'uppercase',
             border: '2px solid white',
             boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
-          }}>{
-              p.photo.avatar ? (
-                <img src={`/uploads/avatars/${p.photo.avatar}`} alt="" style={{width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-              ) : (p.photo.username || '?')[0].toUpperCase()
-            }
+          }}>
+            {p.photo.avatar ? (
+              <img src={`/uploads/avatars/${p.photo.avatar}`} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (p.photo.username || '?')[0].toUpperCase()}
           </div>
           <div
             className="memories-avatar-tooltip"
@@ -140,12 +162,11 @@ export function PhotoElement(p: PhotoElementProps) {
           >
             {p.photo.username}
           </div>
-          <style>{'.memories-avatar:hover .memories-avatar-tooltip { opacity: 1 !important; }'}</style>
+          <style>{AVATAR_TOOLTIP_STYLE}</style>
         </div>
-        
       )}
 
-      {isOwn && !p.onSelect && (
+      {isOwn && !isSelectionMode && (
         <div
           className="opacity-0 group-hover:opacity-100"
           style={{ position: 'absolute', top: '4px', right: '4px', display: 'flex', gap: '3px', transition: 'opacity 0.15s' }}
@@ -156,18 +177,7 @@ export function PhotoElement(p: PhotoElementProps) {
               p.onToggleSharing(p.photo, !p.photo.shared)
             }}
             title={p.photo.shared ? t('memories.stopSharing') : t('memories.sharePhotos')}
-            style={{
-              width: '26.02px',
-              height: '26.02px',
-              borderRadius: '50%',
-              border: 'none',
-              cursor: 'pointer',
-              background: 'rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(4px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            style={HOVER_ICON_BUTTON_STYLE}
           >
             {p.photo.shared ? <Eye size={12} color="white" /> : <EyeOff size={12} color="white" />}
           </button>
@@ -176,25 +186,14 @@ export function PhotoElement(p: PhotoElementProps) {
               e.stopPropagation()
               p.onRemovePhoto(p.photo)
             }}
-            style={{
-              width: '26.02px',
-              height: '26.02px',
-              borderRadius: '50%',
-              border: 'none',
-              cursor: 'pointer',
-              background: 'rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(4px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            style={HOVER_ICON_BUTTON_STYLE}
           >
             <X size={12} color="white" />
           </button>
         </div>
       )}
 
-      {isOwn && !p.onSelect && !p.photo.shared && (
+      {isOwn && !isSelectionMode && !p.photo.shared && (
         <div
           style={{
             position: 'absolute',

@@ -1,9 +1,28 @@
 import { ArrowUpDown, Link2, Plus, RefreshCw, FolderOpen, X } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { useTranslation } from '../../../i18n'
-import type { AlbumLink } from '../types'
+import type { AlbumLink } from '../utils/types'
 
+const controlStyle: CSSProperties = {
+  padding: '4px 10px',
+  borderRadius: '8px',
+  border: '1px solid var(--border-primary)',
+  background: 'var(--bg-card)',
+  fontSize: '11px',
+  fontFamily: 'inherit',
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
+  outline: 'none',
+}
 
-
+const iconActionStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  padding: '2px',
+  display: 'flex',
+  color: 'var(--text-faint)',
+}
 
 type MemoriesHeaderProps = {
   connected: boolean
@@ -25,8 +44,10 @@ type MemoriesHeaderProps = {
   locations: string[]
 }
 
-export function MemoriesHeader(p: MemoriesHeaderProps) {
+export function MemoriesHeader(props: MemoriesHeaderProps) {
   const { t } = useTranslation()
+  const photosSummary = `${props.allVisibleCount} ${t('memories.photosFound')}${props.othersCount > 0 ? ` · ${props.othersCount} ${t('memories.fromOthers')}` : ''}`
+
   return (
     <div style={{
       display: 'flex',
@@ -44,13 +65,12 @@ export function MemoriesHeader(p: MemoriesHeaderProps) {
             {t('memories.title')}
           </h2>
           <p style={{ margin: '2px 0 0', fontSize: '12.09px', color: 'var(--text-faint)' }}>
-            {p.allVisibleCount} {t('memories.photosFound')}
-            {p.othersCount > 0 && ` · ${p.othersCount} ${t('memories.fromOthers')}`}
+            {photosSummary}
           </p>
         </div>
-        {p.connected && (
+        {props.connected && (
           <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-            <button onClick={p.openAlbumPicker}
+            <button onClick={props.openAlbumPicker}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -68,7 +88,7 @@ export function MemoriesHeader(p: MemoriesHeaderProps) {
               <Link2 size={13} />
               {t('memories.linkAlbum')}
             </button>
-            <button onClick={p.openPicker}
+            <button onClick={props.openPicker}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -89,24 +109,24 @@ export function MemoriesHeader(p: MemoriesHeaderProps) {
           </div>
         )}
       </div>
-      {p.albumLinks.length > 0 && (
+      {props.albumLinks.length > 0 && (
         <div style={{ display: 'flex', gap: '6.05px', flexWrap: 'wrap' }}>
-          {p.albumLinks.map(link => (
+          {props.albumLinks.map(link => (
             <div key={link.id} style={{
               display: 'flex', alignItems: 'center', gap: '6.05px', padding: '4.16px 10.2px', borderRadius: '8.31px',
               background: 'var(--bg-tertiary)', fontSize: '11.34px', color: 'var(--text-muted)',
             }}>
               <FolderOpen size={11} />
               <span style={{ fontWeight: 500 }}>{link.album_name}</span>
-              {link.username !== p.currentUser?.username && <span style={{ color: 'var(--text-faint)' }}>({link.username})</span>}
-              {link.user_id === p.currentUser?.id && (
+              {link.username !== props.currentUser?.username && <span style={{ color: 'var(--text-faint)' }}>({link.username})</span>}
+              {link.user_id === props.currentUser?.id && (
                 <>
-                  <button onClick={() => p.syncAlbum(link.id)} disabled={p.syncing === link.id} title={t('memories.syncAlbum')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', color: 'var(--text-faint)' }}>
-                    <RefreshCw size={11} style={{ animation: p.syncing === link.id ? 'spin 1s linear infinite' : 'none' }} />
+                  <button onClick={() => props.syncAlbum(link.id)} disabled={props.syncing === link.id} title={t('memories.syncAlbum')}
+                    style={iconActionStyle}>
+                    <RefreshCw size={11} style={{ animation: props.syncing === link.id ? 'spin 1s linear infinite' : 'none' }} />
                   </button>
-                  <button onClick={() => p.unlinkAlbum(link.id)} title={t('memories.unlinkAlbum')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', color: 'var(--text-faint)' }}>
+                  <button onClick={() => props.unlinkAlbum(link.id)} title={t('memories.unlinkAlbum')}
+                    style={iconActionStyle}>
                     <X size={11} />
                   </button>
                 </>
@@ -117,33 +137,25 @@ export function MemoriesHeader(p: MemoriesHeaderProps) {
       )}
 
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <button onClick={p.onSortToggle}
+        <button onClick={props.onSortToggle}
           style={{
             display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '8px',
             border: '1px solid var(--border-primary)', background: 'var(--bg-card)',
             fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)',
           }}>
-          <ArrowUpDown size={11} /> {p.sortAsc ? t('memories.oldest') : t('memories.newest')}
+          <ArrowUpDown size={11} /> {props.sortAsc ? t('memories.oldest') : t('memories.newest')}
         </button>
-        <select value={p.groupBy} onChange={e => p.onGroupByChange(e.target.value as 'day' | 'week' | 'month')}
-          style={{
-            padding: '4px 10px', borderRadius: '8px', border: '1px solid var(--border-primary)',
-            background: 'var(--bg-card)', fontSize: '11px', fontFamily: 'inherit', color: 'var(--text-muted)',
-            cursor: 'pointer', outline: 'none',
-          }}>
+        <select value={props.groupBy} onChange={e => props.onGroupByChange(e.target.value as 'day' | 'week' | 'month')}
+          style={controlStyle}>
           <option value="day">{t('memories.filter.day') || 'Day'}</option>
           <option value="week">{t('memories.filter.week') || 'Week'}</option>
           <option value="month">{t('memories.filter.month') || 'Month'}</option>
         </select>
-        {p.locations.length > 1 && (
-          <select value={p.locationFilter} onChange={e => p.onLocationFilterChange(e.target.value)}
-            style={{
-              padding: '4px 10px', borderRadius: '8px', border: '1px solid var(--border-primary)',
-              background: 'var(--bg-card)', fontSize: '11px', fontFamily: 'inherit', color: 'var(--text-muted)',
-              cursor: 'pointer', outline: 'none',
-            }}>
+        {props.locations.length > 1 && (
+          <select value={props.locationFilter} onChange={e => props.onLocationFilterChange(e.target.value)}
+            style={controlStyle}>
             <option value="">{t('memories.allLocations')}</option>
-            {p.locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+            {props.locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
           </select>
         )}
       </div>

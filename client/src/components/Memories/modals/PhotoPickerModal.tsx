@@ -3,11 +3,12 @@ import apiClient from '../../../api/client'
 import { clearImageQueue } from '../../../api/authUrl'
 import { useTranslation } from '../../../i18n'
 import { useToast } from '../../shared/Toast'
-import { PhotoGallery } from './PhotoGallery'
+import { PhotoGallery } from '../components/PhotoGallery'
 import { ConfirmShareModal } from './ConfirmShareModal'
-import { PickerHeader } from './PickerHeader'
-import { buildProviderMemoriesUrl, buildUnifiedMemoriesUrl } from '../urlBuilders'
-import type { Asset, PhotoProvider, TripPhoto } from '../types'
+import { PickerHeader } from '../components/PickerHeader'
+import { buildProviderMemoriesUrl, buildUnifiedMemoriesUrl } from '../utils/urlBuilders'
+import type { Asset, PhotoProvider, TripPhoto } from '../utils/types'
+
 
 interface PhotoPickerModalProps {
   availableProviders: PhotoProvider[]
@@ -39,6 +40,13 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
 
   const mountedRef = useRef(true)
 
+  const controllerRef = useRef<AbortController | null>(null)
+  const isCanceledLoadError = (error: unknown): boolean => {
+    if (!error || typeof error !== 'object') return false
+    const candidate = error as { name?: string; code?: string }
+    return candidate.name === 'AbortError' || candidate.name === 'CanceledError' || candidate.code === 'ERR_CANCELED'
+  }
+
   const loadPickerPhotos = async (offset: number, append: boolean) => {
     if (!p.selectedProvider) {
       setPickerPhotos([])
@@ -50,17 +58,24 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       return
     }
 
+    controllerRef.current?.abort()
     setPickerLoadError(false)
     if (append) setPickerLoadingMore(true)
     else setPickerLoading(true)
 
     try {
-      const res = await apiClient.post(buildProviderMemoriesUrl(p.tripId, p.selectedProvider, 'search'), {
+      const newController = new AbortController()
+      controllerRef.current = newController
+      const res = await apiClient.post(
+        buildProviderMemoriesUrl(p.tripId, p.selectedProvider, 'search'),
+        {
         from: p.pickerDateFilter && p.startDate ? p.startDate : undefined,
         to: p.pickerDateFilter && p.endDate ? p.endDate : undefined,
         offset,
         limit: PAGE_SIZE,
-      })
+        },
+        { signal: newController.signal }
+      )
 
       if (!mountedRef.current) return
       const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: p.selectedProvider }))
@@ -68,8 +83,9 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       setPickerOffset(offset + incoming.length)
       setPickerHasMore(Boolean(res.data.hasMore) && incoming.length > 0)
       setPickerLoadError(false)
-    } catch {
+    } catch (error) {
       if (!mountedRef.current) return
+      if (isCanceledLoadError(error)) return
       if (!append) {
         setPickerPhotos([])
         setPickerHasMore(false)
@@ -86,6 +102,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
 
   useEffect(() => {
     mountedRef.current = true
+    setPickerPhotos([])
     loadPickerPhotos(0, false)
     return () => {
       mountedRef.current = false
@@ -95,26 +112,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const loadMorePickerPhotos = async () => {
     if (!p.selectedProvider || pickerLoading || pickerLoadingMore || !pickerHasMore ) return
 
-    setPickerLoadError(false)
-    setPickerLoadingMore(true)
-    try {
-      const res = await apiClient.post(buildProviderMemoriesUrl(p.tripId, p.selectedProvider, 'search'), {
-        from: p.pickerDateFilter && p.startDate ? p.startDate : undefined,
-        to: p.pickerDateFilter && p.endDate ? p.endDate : undefined,
-        offset: pickerOffset,
-        limit: PAGE_SIZE,
-      })
-
-      const incoming = (res.data.assets || []).map((asset: Asset) => ({ ...asset, provider: p.selectedProvider }))
-      setPickerPhotos(prev => [...prev, ...incoming])
-      setPickerOffset(prev => prev + incoming.length)
-      setPickerHasMore(Boolean(res.data.hasMore) && incoming.length > 0)
-    } catch {
-      setPickerLoadError(true)
-      toast.error(t('memories.error.loadPhotos'))
-    } finally {
-      setPickerLoadingMore(false)
-    }
+    await loadPickerPhotos(pickerOffset, true)
   }
 
   const { scrollRef, handleScroll } = useInfiniteScroll({
@@ -159,69 +157,12 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
       provider_name: p.availableProviders.find(pr => pr.id === p.selectedProvider)?.name || 'Photo provider',
     })
 
-  const controls = p.startDate && p.endDate && (
-    <>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button
-          onClick={() => {
-            if (!p.pickerDateFilter) {
-              p.onSetPickerDateFilter(true)
-            }
-          }}
-          style={{
-            padding: '6px 14px',
-            borderRadius: '99px',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            border: '1px solid',
-            transition: 'all 0.15s',
-            background: p.pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
-            borderColor: p.pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
-            color: p.pickerDateFilter ? 'var(--bg-primary)' : 'var(--text-muted)',
-          }}
-        >
-          {t('memories.tripDates')} ({p.startDate ? new Date(p.startDate + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ''} - {p.endDate ? new Date(p.endDate + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : ''})
-        </button>
-        <button
-          onClick={() => {
-            if (p.pickerDateFilter) {
-              p.onSetPickerDateFilter(false)
-            }
-          }}
-          style={{
-            padding: '6px 14px',
-            borderRadius: '99px',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            border: '1px solid',
-            transition: 'all 0.15s',
-            background: !p.pickerDateFilter ? 'var(--text-primary)' : 'var(--bg-card)',
-            borderColor: !p.pickerDateFilter ? 'var(--text-primary)' : 'var(--border-primary)',
-            color: !p.pickerDateFilter ? 'var(--bg-primary)' : 'var(--text-muted)',
-          }}
-        >
-          {t('memories.allPhotos')}
-        </button>
-      </div>
-
-      {selectedIds.size > 0 && (
-        <p style={{ margin: '8px 0 0', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-          {selectedIds.size} {t('memories.selected')}
-        </p>
-      )}
-    </>
-  )
-
-  // Helper functions
+  const currentUserId = p.currentUserId ?? 0
   const makePickerKey = (tripId: number, userId: number, provider: string, assetId: string): string => `${tripId}::${userId}::${provider}::${assetId}`
 
   const alreadyAdded = new Set(
     p.tripPhotos
-      .filter(tp => tp.user_id === p.currentUserId)
+      .filter(tp => tp.user_id === currentUserId)
       .map(tp => makePickerKey(p.tripId, tp.user_id, tp.provider, tp.asset_id))
   )
 
@@ -237,12 +178,12 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const buildPickerPhoto = (asset: Asset): TripPhoto => ({
     provider: asset.provider,
     asset_id: asset.id,
-    user_id: p.currentUserId || 0,
+    user_id: currentUserId,
     username: '',
-    shared: alreadyAdded.has(makePickerKey(p.tripId, p.currentUserId, asset.provider, asset.id)) ? 1 : 0,
+    shared: alreadyAdded.has(makePickerKey(p.tripId, currentUserId, asset.provider, asset.id)) ? 1 : 0,
     added_at: asset.takenAt || new Date().toISOString(),
     taken_at: asset.takenAt || null,
-    key: makePickerKey(p.tripId, p.currentUserId, asset.provider, asset.id),
+    key: makePickerKey(p.tripId, currentUserId, asset.provider, asset.id),
   })
 
   const pickerTripPhotos = pickerPhotos.map(buildPickerPhoto)
@@ -255,7 +196,7 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
   const executeAddPhotos = async () => {
     setShowConfirmShare(false)
     try {
-      const assetsByKey = new Map(pickerPhotos.map(asset => [makePickerKey(p.tripId, p.currentUserId, asset.provider, asset.id), asset]))
+      const assetsByKey = new Map(pickerPhotos.map(asset => [makePickerKey(p.tripId, currentUserId, asset.provider, asset.id), asset]))
       const groupedByProvider = new Map<string, Asset[]>()
       for (const key of selectedIds) {
         const asset = assetsByKey.get(key)
@@ -282,33 +223,13 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
     }
   }
 
-  const primaryAction = (
-    <button
-      onClick={confirmSelection}
-      disabled={selectedIds.size === 0}
-      style={{
-        padding: '7px 14px',
-        borderRadius: '10px',
-        border: 'none',
-        fontSize: '12px',
-        fontWeight: 600,
-        cursor: selectedIds.size > 0 ? 'pointer' : 'default',
-        fontFamily: 'inherit',
-        background: selectedIds.size > 0 ? 'var(--text-primary)' : 'var(--border-primary)',
-        color: selectedIds.size > 0 ? 'var(--bg-primary)' : 'var(--text-faint)',
-      }}
-    >
-      {selectedIds.size > 0 ? t('memories.addSelected', { count: selectedIds.size }) : t('memories.addPhotos')}
-    </button>
-  )
-
   return <>
     <PhotoGallery
       allVisible={pickerTripPhotos}
       currentUser={p.currentUserId ? { id: p.currentUserId } as any : null}
       openLightbox={(_photo: TripPhoto) => { }}
       openPicker={() => { }}
-      setTripPhotos={(_photos: TripPhoto[]) => { }}
+      setTripPhotos={(_value) => { }}
       tripId={p.tripId}
       groupBy="month"
       sortOrder="newest"
@@ -360,12 +281,19 @@ export function PhotoPickerModal(p: PhotoPickerModalProps) {
           availableProviders={p.availableProviders}
           selectedProvider={p.selectedProvider}
           onSelectProvider={p.onSelectProvider}
+          startDate={p.startDate}
+          endDate={p.endDate}
+          pickerDateFilter={p.pickerDateFilter}
+          onSetPickerDateFilter={p.onSetPickerDateFilter}
           onClose={() => {
             clearImageQueue()
             p.onClose()
           }}
-          primaryAction={primaryAction}
-          controls={controls}
+          primaryAction={{
+            onClick: confirmSelection,
+            text: selectedIds.size > 0 ? t('memories.addSelected', { count: selectedIds.size }) : t('memories.addPhotos'),
+            disabled: selectedIds.size === 0,
+          }}
         />
       }
     />

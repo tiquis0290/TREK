@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Info, MapPin, X } from 'lucide-react'
 import apiClient from '../../../api/client'
 import { fetchImageAsBlob } from '../../../api/authUrl'
-import { buildProviderAssetMemoriesUrl } from '../urlBuilders'
-import type { TripPhoto } from '../types'
+import { buildProviderAssetMemoriesUrl } from '../utils/urlBuilders'
+import type { TripPhoto } from '../utils/types'
 
 interface MemoriesLightboxProps {
   allVisible: TripPhoto[]

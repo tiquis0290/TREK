@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Info, MapPin, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Info, Loader2, MapPin, X } from 'lucide-react'
 import apiClient from '../../../api/client'
-import { fetchImageAsBlob } from '../../../api/authUrl'
+import { fetchImageAsBlob, getAuthUrl } from '../../../api/authUrl'
 import { buildProviderAssetMemoriesUrl } from '../utils/urlBuilders'
 import type { TripPhoto } from '../utils/types'
 
@@ -27,6 +27,7 @@ export function MemoriesLightbox({
   const [showMobileInfo, setShowMobileInfo] = useState(false)
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
   const [currentPhoto, setCurrentPhoto] = useState<TripPhoto | null>(initialPhoto)
+  const [downloadingOriginal, setDownloadingOriginal] = useState(false)
 
   const imageCacheRef = useRef<Record<string, string>>({})
   const infoCacheRef = useRef<Record<string, any>>({})
@@ -34,6 +35,7 @@ export function MemoriesLightbox({
   const pendingInfoFetches = useRef<Record<string, Promise<void>>>({})
   const pendingImageControllers = useRef<Record<string, AbortController>>({})
   const lastNavigation = useRef<'prev' | 'next' | null>(null)
+  const downloadSpinnerTimerRef = useRef<number | null>(null)
 
 
 
@@ -226,6 +228,9 @@ export function MemoriesLightbox({
 
   useEffect(() => {
     return () => {
+      if (downloadSpinnerTimerRef.current) {
+        window.clearTimeout(downloadSpinnerTimerRef.current)
+      }
       Object.values(imageCacheRef.current).forEach(URL.revokeObjectURL)
     }
   }, [])
@@ -252,6 +257,34 @@ export function MemoriesLightbox({
     if (photo) {
       lastNavigation.current = 'next'
       setCurrentPhoto(photo)
+    }
+  }
+
+  const downloadOriginal = async () => {
+    if (!currentPhoto || downloadingOriginal) return
+
+    setDownloadingOriginal(true)
+
+    try {
+      const originalUrl = '/api' + buildProviderAssetMemoriesUrl(tripId, currentPhoto, 'original')
+      const downloadUrl = await getAuthUrl(originalUrl, 'download')
+      const fallbackName = `${currentPhoto.provider}-${currentPhoto.asset_id}`
+      const fileName = lightboxInfo?.fileName || fallbackName
+
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } finally {
+      if (downloadSpinnerTimerRef.current) {
+        window.clearTimeout(downloadSpinnerTimerRef.current)
+      }
+      downloadSpinnerTimerRef.current = window.setTimeout(() => {
+        setDownloadingOriginal(false)
+        downloadSpinnerTimerRef.current = null
+      }, 1000)
     }
   }
 
@@ -471,6 +504,33 @@ export function MemoriesLightbox({
         </button>
       )}
 
+      <button
+        onClick={e => {
+          e.stopPropagation()
+            void downloadOriginal()
+        }}
+        style={{
+          position: 'absolute',
+          top: '16px',
+          right: '68px',
+          zIndex: 10,
+          width: '40px',
+          height: '40px',
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.1)',
+          border: 'none',
+          cursor: downloadingOriginal ? 'default' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        aria-label="Download original"
+        title="Download original"
+        disabled={downloadingOriginal}
+      >
+        {downloadingOriginal ? <Loader2 size={18} color="white" className="animate-spin" /> : <Download size={18} color="white" />}
+      </button>
+
       {(lightboxInfo || lightboxInfoLoading) && (
         <button
           onClick={e => {
@@ -480,7 +540,7 @@ export function MemoriesLightbox({
           style={{
             position: 'absolute',
             top: '16px',
-            right: '68px',
+            right: '120px',
             zIndex: 10,
             width: '40px',
             height: '40px',

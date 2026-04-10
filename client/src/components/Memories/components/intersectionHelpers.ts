@@ -22,7 +22,7 @@ export function observeIntersection(
 
     const scrollParent = getScrollableParent(element instanceof HTMLElement ? element : element.parentElement)
     const root = scrollParent || null
-    const rootHeight = scrollParent ? scrollParent.clientHeight : window.innerHeight
+    const rootHeight = window.innerHeight
     const actualRootMargin = rootMargin !== undefined ? rootMargin : (root ? `${rootHeight}px` : '0px')
 
     const observer = new IntersectionObserver(

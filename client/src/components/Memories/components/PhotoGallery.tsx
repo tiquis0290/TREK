@@ -1,5 +1,5 @@
 import { User } from "../../../types";
-import { useRef, useState, type ReactNode, type UIEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type UIEvent } from 'react'
 import { Camera, Plus, Check } from 'lucide-react'
 import { PhotoElement } from "./PhotoElement";
 import { TripPhoto } from "../types";
@@ -8,6 +8,7 @@ import { useTranslation } from "../../../i18n";
 import apiClient from "../../../api/client";
 import useToast from "../../shared/Toast";
 import { PhotoSection } from "./PhotoSection";
+import Headroom from 'react-headroom';
 
 interface PhotoGalleryProps {
   allVisible: TripPhoto[];
@@ -37,10 +38,6 @@ interface PhotoGalleryProps {
 export function PhotoGallery(p: PhotoGalleryProps) {
   const { t } = useTranslation()
   const toast = useToast()
-
-  const [showHeader, setShowHeader] = useState(true)
-  const headerRef = useRef<HTMLDivElement | null>(null)
-  const lastScrollTop = useRef(0)
 
   // ── Remove photo ──────────────────────────────────────────────────────────
 
@@ -81,38 +78,6 @@ export function PhotoGallery(p: PhotoGalleryProps) {
           : p
       ))
     } catch { toast.error(t('memories.error.toggleSharing')) }
-  }
-
-  // -- scroll handling for compact header ---
-
-  const [lastHeaderHeight, setLastHeaderHeight] = useState(0)
-
-  const handleScroll = async (event: UIEvent<HTMLDivElement>) => {
-    const scrollTop = event.currentTarget.scrollTop
-    const delta = scrollTop - lastScrollTop.current
-    const minShow = headerRef.current?.offsetHeight * 1.1 || 100
-    if (lastHeaderHeight !== headerRef.current?.offsetHeight) {
-      setLastHeaderHeight(headerRef.current?.offsetHeight || 0)
-      return
-    }
-    let nextShow = showHeader
-    let mindelta = 1
-
-    if (scrollTop < minShow) {
-      nextShow = true
-    }
-    if (delta < -mindelta) {
-      nextShow = true
-    } else if (delta > mindelta) {
-      nextShow = false
-    }
-
-    if (nextShow !== showHeader) {
-      await new Promise<void>(resolve => setTimeout(resolve, 1));
-      setShowHeader(nextShow);
-    }
-    lastScrollTop.current = scrollTop
-    if (p.onscroll) p.onscroll(event)
   }
 
 
@@ -157,6 +122,7 @@ export function PhotoGallery(p: PhotoGalleryProps) {
     return 'Unknown';
   }
 
+
   // Group photos
   const sortedPhotos = [...p.allVisible].sort((a, b) => {
     const aDate = new Date(a.taken_at || a.added_at || 0).getTime();
@@ -179,22 +145,36 @@ export function PhotoGallery(p: PhotoGalleryProps) {
 
   let ref = useRef<HTMLDivElement | null>(null)
   return <>
-    <div style={{ overflowY: 'auto', height: '100%' }} onScroll={handleScroll} ref={ref}>
-      <div ref={headerRef}
-        style={{
-          position: 'sticky',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 8,
-          overflow: 'hidden',
-          transition: 'transform 160ms ease 0s, opacity 160ms 0s',
-          transform: showHeader ? 'translateY(0)' : 'translateY(-100%)',
-          opacity: showHeader ? 1 : 0,
-          pointerEvents: showHeader ? 'auto' : 'none',
-        }}>
+    <div style={{ overflowY: 'auto', height: '100%'}} ref={ref}>
+      <Headroom parent={() => ref.current || window} disableInlineStyles>
         {p.header}
-      </div>
+      </Headroom>
+      <style>{`
+        .headroom {
+          top: 0;
+          left: 0;
+          right: 0;
+        }
+        .headroom--unfixed {
+          position: relative;
+          transform: translateY(0);
+        }
+        .headroom--scrolled {
+          transition: transform 200ms ease-in-out;
+        }
+        .headroom--unpinned {
+          position: fixed;
+          z-index: 8;
+          top: 100px; 
+          transform: translateY(-100%);
+        }
+        .headroom--pinned {
+          position: fixed;
+          z-index: 8;
+          top: 100px;
+          transform: translateY(0%);
+        }
+      `}</style>
       {p.loadingContent ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px' }}>
           <div className="w-8 h-8 border-2 rounded-full animate-spin"

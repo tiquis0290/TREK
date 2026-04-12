@@ -1357,6 +1357,12 @@ const ar: Record<string, string | { name: string; category: string }[]> = {
   'photos.linkPlace': 'ربط بمكان',
   'photos.noPlace': 'بلا مكان',
   'photos.uploadN': 'رفع {n} صورة',
+  'photos.linkDay': 'ربط اليوم',
+  'photos.noDay': 'لا يوم',
+  'photos.dayLabel': 'اليوم {number}',
+  'photos.photoSelected': 'صورة محددة',
+  'photos.photosSelected': 'صور محددة',
+  'photos.fileTypeHint': 'JPG, PNG, WebP · الحد الأقصى 10 ميغابايت · حتى 30 صورة',
 
   // Backup restore modal
   'backup.restoreConfirmTitle': 'استعادة النسخة الاحتياطية؟',

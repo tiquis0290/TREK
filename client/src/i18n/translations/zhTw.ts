@@ -1379,6 +1379,12 @@ const zhTw: Record<string, string> = {
   'photos.linkPlace': '關聯地點',
   'photos.noPlace': '無地點',
   'photos.uploadN': '上傳 {n} 張照片',
+  'photos.linkDay': '關聯天數',
+  'photos.noDay': '無天數',
+  'photos.dayLabel': '第 {number} 天',
+  'photos.photoSelected': '張照片已選擇',
+  'photos.photosSelected': '張照片已選擇',
+  'photos.fileTypeHint': 'JPG, PNG, WebP · 最大 10 MB · 最多 30 張照片',
 
   // Backup restore modal
   'backup.restoreConfirmTitle': '恢復備份？',

@@ -1356,6 +1356,12 @@ const fr: Record<string, string> = {
   'photos.linkPlace': 'Lier au lieu',
   'photos.noPlace': 'Aucun lieu',
   'photos.uploadN': '{n} photo(s) importée(s)',
+  'photos.linkDay': 'Lier le jour',
+  'photos.noDay': 'Aucun jour',
+  'photos.dayLabel': 'Jour {number}',
+  'photos.photoSelected': 'Photo sélectionnée',
+  'photos.photosSelected': 'Photos sélectionnées',
+  'photos.fileTypeHint': "JPG, PNG, WebP · max. 10 Mo · jusqu'à 30 photos",
 
   // Backup restore modal
   'backup.restoreConfirmTitle': 'Restaurer la sauvegarde ?',

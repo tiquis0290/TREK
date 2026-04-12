@@ -1329,6 +1329,12 @@ const br: Record<string, string | { name: string; category: string }[]> = {
   'photos.linkPlace': 'Vincular lugar',
   'photos.noPlace': 'Sem lugar',
   'photos.uploadN': 'Enviar {n} foto(s)',
+  'photos.linkDay': 'Vincular dia',
+  'photos.noDay': 'Nenhum dia',
+  'photos.dayLabel': 'Dia {number}',
+  'photos.photoSelected': 'Foto selecionada',
+  'photos.photosSelected': 'Fotos selecionadas',
+  'photos.fileTypeHint': 'JPG, PNG, WebP · máx. 10 MB · até 30 fotos',
 
   // Backup restore modal
   'backup.restoreConfirmTitle': 'Restaurar backup?',

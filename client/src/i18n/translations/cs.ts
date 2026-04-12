@@ -1355,6 +1355,12 @@ const cs: Record<string, string | { name: string; category: string }[]> = {
   'photos.linkPlace': 'Propojit s místem',
   'photos.noPlace': 'Žádné místo',
   'photos.uploadN': 'Nahrát {n} fotek',
+  'photos.linkDay': 'Propojit den',
+  'photos.noDay': 'Žádný den',
+  'photos.dayLabel': 'Den {number}',
+  'photos.photoSelected': 'Fotografie vybrána',
+  'photos.photosSelected': 'Fotografie vybrány',
+  'photos.fileTypeHint': 'JPG, PNG, WebP · max. 10 MB · až 30 fotografií',
 
   // Obnovení zálohy
   'backup.restoreConfirmTitle': 'Obnovit zálohu?',

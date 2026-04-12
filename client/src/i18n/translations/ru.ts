@@ -1353,6 +1353,12 @@ const ru: Record<string, string> = {
   'photos.linkPlace': 'Привязать место',
   'photos.noPlace': 'Без места',
   'photos.uploadN': '{n} фото загружено',
+  'photos.linkDay': 'Связать день',
+  'photos.noDay': 'Нет дня',
+  'photos.dayLabel': 'День {number}',
+  'photos.photoSelected': 'Фото выбрано',
+  'photos.photosSelected': 'Фото выбраны',
+  'photos.fileTypeHint': 'JPG, PNG, WebP · макс. 10 МБ · до 30 фото',
 
   // Backup restore modal
   'backup.restoreConfirmTitle': 'Восстановить копию?',

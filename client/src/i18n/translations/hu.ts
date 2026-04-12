@@ -1354,6 +1354,12 @@ const hu: Record<string, string | { name: string; category: string }[]> = {
   'photos.linkPlace': 'Hely társítása',
   'photos.noPlace': 'Nincs hely',
   'photos.uploadN': '{n} fotó feltöltése',
+  'photos.linkDay': 'Nap csatolása',
+  'photos.noDay': 'Nincs nap',
+  'photos.dayLabel': '{number}. nap',
+  'photos.photoSelected': 'Fotó kiválasztva',
+  'photos.photosSelected': 'Fotók kiválasztva',
+  'photos.fileTypeHint': 'JPG, PNG, WebP · max. 10 MB · legfeljebb 30 fotó',
 
   // Mentés visszaállítása modal
   'backup.restoreConfirmTitle': 'Mentés visszaállítása?',

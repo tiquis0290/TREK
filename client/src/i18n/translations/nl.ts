@@ -1353,6 +1353,12 @@ const nl: Record<string, string> = {
   'photos.linkPlace': 'Koppel plaats',
   'photos.noPlace': 'Geen plaats',
   'photos.uploadN': '{n} foto(\'s) uploaden',
+  'photos.linkDay': 'Dag koppelen',
+  'photos.noDay': 'Geen dag',
+  'photos.dayLabel': 'Dag {number}',
+  'photos.photoSelected': 'Foto geselecteerd',
+  'photos.photosSelected': "Foto's geselecteerd",
+  'photos.fileTypeHint': "JPG, PNG, WebP · max. 10 MB · tot 30 foto's",
 
   // Backup restore modal
   'backup.restoreConfirmTitle': 'Back-up herstellen?',

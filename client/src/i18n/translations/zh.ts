@@ -1353,6 +1353,12 @@ const zh: Record<string, string> = {
   'photos.linkPlace': '关联地点',
   'photos.noPlace': '无地点',
   'photos.uploadN': '上传 {n} 张照片',
+  'photos.linkDay': '关联天数',
+  'photos.noDay': '无天数',
+  'photos.dayLabel': '第 {number} 天',
+  'photos.photoSelected': '张照片已选择',
+  'photos.photosSelected': '张照片已选择',
+  'photos.fileTypeHint': 'JPG, PNG, WebP · 最大 10 MB · 最多 30 张照片',
 
   // Backup restore modal
   'backup.restoreConfirmTitle': '恢复备份？',

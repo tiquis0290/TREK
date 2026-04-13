@@ -1458,33 +1458,61 @@ function runMigrations(db: Database.Database): void {
       // 2. Migrate trip_photos → trek_photos + photo_id FK
       const tripPhotosExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'trip_photos'").get();
       if (tripPhotosExists) {
-        // Insert existing trip photo references into trek_photos (deduplicate by provider+asset_id+owner)
-        db.exec(`
-          INSERT OR IGNORE INTO trek_photos (provider, asset_id, owner_id, created_at)
-          SELECT DISTINCT provider, asset_id, user_id, COALESCE(added_at, CURRENT_TIMESTAMP)
-          FROM trip_photos
-          WHERE asset_id IS NOT NULL AND TRIM(asset_id) != ''
-        `);
+        // Detect schema variant: old (immich_asset_id) vs new (asset_id + provider)
+        const tpCols = db.prepare("PRAGMA table_info('trip_photos')").all() as Array<{ name: string }>;
+        const tpColNames = new Set(tpCols.map(c => c.name));
+        const hasProvider = tpColNames.has('provider');
+        const assetCol = tpColNames.has('asset_id') ? 'asset_id' : (tpColNames.has('immich_asset_id') ? 'immich_asset_id' : null);
+        const hasAlbumLink = tpColNames.has('album_link_id');
 
-        // Recreate trip_photos with photo_id FK
-        db.exec(`
-          CREATE TABLE trip_photos_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
-            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            photo_id INTEGER NOT NULL REFERENCES trek_photos(id) ON DELETE CASCADE,
-            shared INTEGER NOT NULL DEFAULT 1,
-            album_link_id INTEGER REFERENCES trip_album_links(id) ON DELETE SET NULL,
-            added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(trip_id, user_id, photo_id)
-          )
-        `);
-        db.exec(`
-          INSERT OR IGNORE INTO trip_photos_new (trip_id, user_id, photo_id, shared, album_link_id, added_at)
-          SELECT tp.trip_id, tp.user_id, tkp.id, tp.shared, tp.album_link_id, tp.added_at
-          FROM trip_photos tp
-          JOIN trek_photos tkp ON tkp.provider = tp.provider AND tkp.asset_id = tp.asset_id AND tkp.owner_id = tp.user_id
-        `);
+        if (assetCol) {
+          const providerExpr = hasProvider ? 'provider' : "'immich'";
+          const sharedExpr = tpColNames.has('shared') ? 'shared' : '1';
+          const addedAtExpr = tpColNames.has('added_at') ? 'COALESCE(added_at, CURRENT_TIMESTAMP)' : 'CURRENT_TIMESTAMP';
+          const albumLinkExpr = hasAlbumLink ? 'album_link_id' : 'NULL';
+
+          // Insert existing trip photo references into trek_photos
+          db.exec(`
+            INSERT OR IGNORE INTO trek_photos (provider, asset_id, owner_id, created_at)
+            SELECT DISTINCT ${providerExpr}, ${assetCol}, user_id, ${addedAtExpr}
+            FROM trip_photos
+            WHERE ${assetCol} IS NOT NULL AND TRIM(${assetCol}) != ''
+          `);
+
+          // Recreate trip_photos with photo_id FK
+          db.exec(`
+            CREATE TABLE trip_photos_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+              user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              photo_id INTEGER NOT NULL REFERENCES trek_photos(id) ON DELETE CASCADE,
+              shared INTEGER NOT NULL DEFAULT 1,
+              album_link_id INTEGER REFERENCES trip_album_links(id) ON DELETE SET NULL,
+              added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              UNIQUE(trip_id, user_id, photo_id)
+            )
+          `);
+          db.exec(`
+            INSERT OR IGNORE INTO trip_photos_new (trip_id, user_id, photo_id, shared, album_link_id, added_at)
+            SELECT tp.trip_id, tp.user_id, tkp.id, ${sharedExpr}, ${albumLinkExpr}, ${addedAtExpr}
+            FROM trip_photos tp
+            JOIN trek_photos tkp ON tkp.provider = ${providerExpr} AND tkp.asset_id = tp.${assetCol} AND tkp.owner_id = tp.user_id
+          `);
+        } else {
+          // No asset column at all — just recreate empty
+          db.exec(`
+            CREATE TABLE trip_photos_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+              user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              photo_id INTEGER NOT NULL REFERENCES trek_photos(id) ON DELETE CASCADE,
+              shared INTEGER NOT NULL DEFAULT 1,
+              album_link_id INTEGER REFERENCES trip_album_links(id) ON DELETE SET NULL,
+              added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              UNIQUE(trip_id, user_id, photo_id)
+            )
+          `);
+        }
         db.exec('DROP TABLE trip_photos');
         db.exec('ALTER TABLE trip_photos_new RENAME TO trip_photos');
         db.exec('CREATE INDEX IF NOT EXISTS idx_trip_photos_trip ON trip_photos(trip_id)');

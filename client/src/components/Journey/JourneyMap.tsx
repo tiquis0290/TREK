@@ -168,7 +168,8 @@ const JourneyMap = forwardRef<JourneyMapHandle, Props>(function JourneyMap(
     L.tileLayer(mapTileUrl || defaultTile, {
       maxZoom: 18,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map)
+      referrerPolicy: 'strict-origin-when-cross-origin',
+    } as any).addTo(map)
 
     const items = buildMarkerItems(entries)
     itemsRef.current = items

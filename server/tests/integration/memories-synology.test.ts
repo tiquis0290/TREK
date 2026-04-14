@@ -51,14 +51,16 @@ vi.mock('../../src/utils/ssrfGuard', async () => {
     // Determine which API was called from the URL query param (e.g. ?api=SYNO.API.Auth)
     // or from the body for POST requests.
     let apiName = '';
+    let params = new URLSearchParams();
     try {
-      apiName = new URL(u).searchParams.get('api') || '';
+      params = new URL(u).searchParams;
+      apiName = params.get('api') || '';
     } catch {}
     if (!apiName && init?.body) {
-      const body = init.body instanceof URLSearchParams
+      params = init.body instanceof URLSearchParams
         ? init.body
         : new URLSearchParams(String(init.body));
-      apiName = body.get('api') || '';
+      apiName = params.get('api') || '';
     }
 
     // Auth login — used by settings save, status, test-connection
@@ -154,6 +156,8 @@ vi.mock('../../src/utils/ssrfGuard', async () => {
 
     // Thumbnail stream
     if (apiName === 'SYNO.Foto.Thumbnail') {
+      if (!(['sm', 'm', 'xl', 'preview'].includes(params.get('size') || '')))
+        return Promise.reject(new Error(`Unexpected thumbnail size: ${params.get('size')}`));
       const imageBytes = Buffer.from('fake-synology-thumbnail');
       return Promise.resolve({
         ok: true, status: 200,
@@ -435,6 +439,24 @@ describe('Synology asset access', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('image/jpeg');
+  });
+
+  it('SYNO-032b — GET /api/photos/:id/thumbnail uses an allowed Synology thumbnail size', async () => {
+    const { user } = createUser(testDb);
+    setSynologyCredentials(testDb, user.id, 'https://synology.example.com', 'admin', 'pass');
+
+    const insert = testDb.prepare(
+      'INSERT INTO trek_photos (provider, asset_id, owner_id) VALUES (?, ?, ?)'
+    ).run('synologyphotos', '101_cachekey', user.id);
+    const trekPhotoId = Number(insert.lastInsertRowid);
+
+    vi.mocked(safeFetch).mockClear();
+
+    const res = await request(app)
+      .get(`/api/photos/${trekPhotoId}/thumbnail`)
+      .set('Cookie', authCookie(user.id));
+
+    expect(res.status).toBe(200);
   });
 
   it('SYNO-033 — GET /assets/original streams image data for shared photo', async () => {

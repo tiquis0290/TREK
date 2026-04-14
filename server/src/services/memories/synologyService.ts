@@ -585,7 +585,6 @@ export async function streamSynologyAsset(
     targetUserId: number,
     photoId: string,
     kind: 'thumbnail' | 'original',
-    size?: string,
 ): Promise<void> {
     const parsedId = _splitPackedSynologyId(photoId);
     if (!parsedId) {
@@ -609,6 +608,8 @@ export async function streamSynologyAsset(
         return;
     }
 
+    
+    //size: 'sm' 240px| 'm' 320px| 'xl' 1280px| 'preview' ?
     const params = kind === 'thumbnail'
         ? new URLSearchParams({
             api: 'SYNO.Foto.Thumbnail',
@@ -617,7 +618,7 @@ export async function streamSynologyAsset(
             mode: 'download',
             id: parsedId.id,
             type: 'unit',
-            size: size,
+            size: 'sm',
             cache_key: parsedId.cacheKey,
             _sid: sid.data,
         })

@@ -10,7 +10,6 @@ import { useContextMenu, ContextMenu } from '../shared/ContextMenu'
 import { placesApi } from '../../api/client'
 import { useTripStore } from '../../store/tripStore'
 import { useCanDo } from '../../store/permissionsStore'
-import { useAddonStore } from '../../store/addonStore'
 import type { Place, Category, Day, AssignmentsMap } from '../../types'
 import FileImportModal from './FileImportModal'
 
@@ -44,7 +43,7 @@ const PlacesSidebar = React.memo(function PlacesSidebar({
   const loadTrip = useTripStore((s) => s.loadTrip)
   const can = useCanDo()
   const canEditPlaces = can('place_edit', trip)
-  const isNaverListImportEnabled = useAddonStore((s) => s.isEnabled('naver_list_import'))
+  const isNaverListImportEnabled = true
 
   const [fileImportOpen, setFileImportOpen] = useState(false)
   const [sidebarDropFile, setSidebarDropFile] = useState<File | null>(null)

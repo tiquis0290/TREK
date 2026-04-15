@@ -1605,6 +1605,11 @@ function runMigrations(db: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created ON idempotency_keys(created_at);
       `);
     },
+
+    // Migration 101: Enable naver_list_import by default
+    () => {
+      db.prepare("UPDATE addons SET enabled = 1 WHERE id = 'naver_list_import'").run();
+    },
   ];
 
   if (currentVersion < migrations.length) {

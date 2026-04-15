@@ -11,6 +11,8 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import type { Application } from 'express';
+import path from 'node:path';
+import fs from 'node:fs';
 
 // ── Hoisted DB mock ──────────────────────────────────────────────────────────
 
@@ -176,6 +178,22 @@ vi.mock('../../src/utils/ssrfGuard', async () => {
       });
     }
 
+    // Upload item
+    if (apiName === 'SYNO.Foto.Upload.Item') {
+      if (!u.includes('/webapi/entry.cgi/SYNO.Foto.Upload.Item?api=SYNO.Foto.Upload.Item&method=upload&version=1')) {
+        return Promise.reject(new Error(`Unexpected Synology upload endpoint: ${u}`));
+      }
+      if (!(init?.body instanceof Uint8Array || init?.body instanceof Buffer || init?.body)) {
+        return Promise.reject(new Error('Expected multipart upload body'));
+      }
+      return Promise.resolve({
+        ok: true, status: 200,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({ success: true, data: { id: 120673, unit_id: 120672 } }),
+        body: null,
+      });
+    }
+
     return Promise.reject(new Error(`Unexpected safeFetch call to Synology: ${u}, api=${apiName}`));
   }
 
@@ -208,6 +226,7 @@ import { createUser, createTrip, addTripMember, addTripPhoto, setSynologyCredent
 import { authCookie } from '../helpers/auth';
 import { loginAttempts, mfaAttempts } from '../../src/routes/auth';
 import { safeFetch } from '../../src/utils/ssrfGuard';
+import { uploadToSynology } from '../../src/services/memories/synologyService';
 
 const app: Application = createApp();
 
@@ -393,6 +412,31 @@ describe('Synology search and albums', () => {
     expect(Array.isArray(res.body.albums)).toBe(true);
     expect(res.body.albums).toHaveLength(2);
     expect(res.body.albums[0]).toMatchObject({ albumName: 'Summer Trip', assetCount: 15 });
+  });
+});
+
+// ── Upload ───────────────────────────────────────────────────────────────────
+
+describe('Synology upload', () => {
+  it('SYNO-023 — uploadToSynology returns ID from getSynologyAssetInfo', async () => {
+    const { user } = createUser(testDb);
+    setSynologyCredentials(testDb, user.id, 'https://synology.example.com', 'admin', 'pass');
+
+    const fixturePath = path.join(__dirname, '../fixtures/small-image.jpg');
+    const uploadPath = `journey/${path.basename(fixturePath)}`;
+    const uploadsDir = path.join(__dirname, '../../uploads/journey');
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+    fs.copyFileSync(fixturePath, path.join(uploadsDir, path.basename(fixturePath)));
+
+    try {
+      const assetId = await uploadToSynology(user.id, uploadPath, path.basename(fixturePath));
+
+      expect(assetId).toBe('101_cachekey');
+      expect(vi.mocked(safeFetch)).toHaveBeenCalled();
+    } finally {
+      const uploadedFile = path.join(uploadsDir, path.basename(fixturePath));
+      if (fs.existsSync(uploadedFile)) fs.unlinkSync(uploadedFile);
+    }
   });
 });
 

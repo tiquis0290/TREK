@@ -8,6 +8,7 @@ import { AuthRequest } from '../types';
 import * as svc from '../services/journeyService';
 import { createOrUpdateJourneyShareLink, getJourneyShareLink, deleteJourneyShareLink, getPublicJourney } from '../services/journeyShareService';
 import { uploadToImmich } from '../services/memories/immichService';
+import { uploadToSynology } from '../services/memories/synologyService';
 
 const router = express.Router();
 
@@ -95,14 +96,21 @@ router.post('/entries/:entryId/photos', authenticate, upload.array('photos', 10)
       req.body?.caption
     );
     if (photo) {
-      // sync to Immich if connected — update the same photo record
+      // Sync to a connected remote photo provider — keep the local record if neither upload works.
       try {
-        const immichId = await uploadToImmich(authReq.user.id, relativePath, file.originalname);
-        if (immichId) {
-          svc.setPhotoProvider(photo.id, 'immich', immichId, authReq.user.id);
-          photo.provider = 'immich' as any;
-          photo.asset_id = immichId;
+        const remoteUploads: Array<{ provider: 'immich' | 'synologyphotos'; upload: () => Promise<string | null> }> = [
+          { provider: 'immich', upload: () => uploadToImmich(authReq.user.id, relativePath, file.originalname) },
+          { provider: 'synologyphotos', upload: () => uploadToSynology(authReq.user.id, relativePath, file.originalname,) },
+        ];
+
+        for (const remote of remoteUploads) {
+          const assetId = await remote.upload();
+          if (!assetId) continue;
+          svc.setPhotoProvider(photo.id, remote.provider, assetId, authReq.user.id);
+          photo.provider = remote.provider as any;
+          photo.asset_id = assetId;
           photo.owner_id = authReq.user.id;
+          break;
         }
       } catch {}
       results.push(photo);

@@ -20,6 +20,9 @@ import {
     AssetInfo
 } from './helpersService';
 import { send as sendNotification } from '../notificationService';
+import { readFile, stat} from "node:fs/promises";
+import { PassThrough } from 'node:stream';
+import { randomBytes } from 'node:crypto';
 
 const SYNOLOGY_PROVIDER = 'synologyphotos';
 // Users provide the full base URL including the Photos app path (e.g. https://nas:5001/photo).
@@ -54,6 +57,45 @@ const SYNOLOGY_ERROR_MESSAGES: Record<number, string> = {
     498: 'System is upgrading.',
     499: 'System is not ready.',
 };
+
+function _createNoopExpressResponse(): Response {
+    const sink = new PassThrough();
+    sink.resume();
+
+    let statusCode = 200;
+    let sent = false;
+
+    const response = sink as unknown as Response;
+    Object.defineProperty(response, 'headersSent', {
+        get: () => sent,
+        configurable: true,
+    });
+
+    response.status = ((code: number) => {
+        statusCode = code;
+        return response;
+    }) as Response['status'];
+
+    response.set = (() => response) as Response['set'];
+
+    response.json = ((body: any) => {
+        sent = true;
+        if (body !== undefined) {
+            sink.write(JSON.stringify(body));
+        }
+        sink.end();
+        return response;
+    }) as Response['json'];
+
+    response.end = ((chunk?: any, encoding?: any, cb?: any) => {
+        sent = true;
+        return PassThrough.prototype.end.call(sink, chunk, encoding, cb) as any;
+    }) as Response['end'];
+
+    response.statusCode = statusCode;
+
+    return response;
+}
 
 interface SynologyUserRecord {
     synology_url?: string | null;
@@ -566,7 +608,7 @@ export async function getSynologyAssetInfo(userId: number, photoId: string, targ
         method: 'get',
         version: 5,
         id: `[${Number(parsedId.id) + 1}]`, //for some reason synology wants id moved by one to get image info
-        additional: ['resolution', 'exif', 'gps', 'address', 'orientation', 'description'],
+        additional: ["thumbnail", "resolution", "exif", "gps", "address", "orientation", "description"],
     });
 
     if (!result.success) return result as ServiceResult<AssetInfo>;
@@ -575,7 +617,6 @@ export async function getSynologyAssetInfo(userId: number, photoId: string, targ
     if (!metadata) return fail('Photo not found', 404);
 
     const normalized = _normalizeSynologyPhotoInfo(metadata);
-    normalized.id = photoId;
     return success(normalized);
 }
 
@@ -633,5 +674,83 @@ export async function streamSynologyAsset(
 
     const url = _buildSynologyEndpoint(synology_credentials.data.synology_url, params.toString());
     await pipeAsset(url, response)
+}
+
+// Upload to synology photos
+
+function _buildSynologyUploadEndpoint(url: string, params: string): string {
+    const normalized = url.replace(/\/$/, '').match(/^https?:\/\//)
+        ? url.replace(/\/$/, '')
+        : `https://${url.replace(/\/$/, '')}`;
+    return `${normalized}${SYNOLOGY_ENDPOINT_PATH}/SYNO.Foto.Upload.Item?${params}`;
+}
+
+export async function uploadToSynology(userId: number, filePath: string, fileName: string, journeyName?: string): Promise<string | null> {
+    const creds = _getSynologyCredentials(userId);
+    if (!creds.success) return null;
+
+    const session = await _getSynologySession(userId);
+    if (!session.success || !session.data) return null;
+
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const fullPath = path.join(__dirname, '../../../uploads', filePath);
+    if (!fs.existsSync(fullPath)) return null;
+    try {
+        const boundary = `----trek-${randomBytes(16).toString('hex')}`;
+
+        const parts: Buffer[] = [];
+        const addField = (name: string, value: string) => {
+            parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
+        };
+        addField("api", "SYNO.Foto.Upload.Item");
+        addField("method", "upload");
+        addField("version", "1");
+
+
+        //add file
+        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: image/png\r\n\r\n`));
+        const fileData = await readFile(fullPath);
+        parts.push(fileData);
+        parts.push(Buffer.from("\r\n"));
+        //
+
+        addField("duplicate", '"ignore"');
+        addField("name", `"${fileName}"`);
+        const fileInfo = await stat(fullPath);
+        addField("mtime", String(Math.round(fileInfo.mtimeMs / 1000)));
+        addField("folder", `[\"Trek\"${journeyName?.trim() ? `,\"${journeyName.trim()}\"` : ''}]`);
+        parts.push(Buffer.from(`--${boundary}--\r\n`));
+
+        const requestBody = Buffer.concat(parts);
+
+
+        const endpoint = _buildSynologyUploadEndpoint(creds.data.synology_url, 'api=SYNO.Foto.Upload.Item&method=upload&version=1&_sid=' + encodeURIComponent(session.data));
+        const res = await safeFetch(endpoint, {
+            method: 'POST',
+            headers: {
+                "Content-Type": `multipart/form-data; boundary=${boundary}`,
+                "Content-Length": String(requestBody.length),
+            },
+            body: requestBody,
+            signal: AbortSignal.timeout(30000) as any,
+        }, { rejectUnauthorized: !creds.data.synology_skip_ssl });
+
+        if (!res.ok) return null;
+
+        const response = await res.json() as SynologyApiResponse<{ id?: string | number; unit_id?: string | number }>;
+        if (!response.success || !response.data) return null;
+
+        const resp = await getSynologyAssetInfo(userId, `${response.data.unit_id}_${response.data.unit_id}`, userId);
+        if (!resp.success) return null;
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        return resp.data.id;
+    } catch (error) {
+        console.error('Error uploading to Synology:', error);
+        return null;
+    }
 }
 

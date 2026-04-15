@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import type { Application } from 'express';
+import path from 'node:path';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 1: Bare in-memory DB — schema applied in beforeAll after mocks register
@@ -54,6 +55,13 @@ vi.mock('../../src/services/memories/immichService', () => ({
   uploadToImmich: vi.fn(async () => null),
   getImmichCredentials: vi.fn(() => null),
 }));
+vi.mock('../../src/services/memories/synologyService', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/memories/synologyService')>('../../src/services/memories/synologyService');
+  return {
+    ...actual,
+    uploadToSynology: vi.fn(async () => null),
+  };
+});
 
 import { createApp } from '../../src/app';
 import { createTables } from '../../src/db/schema';
@@ -70,6 +78,8 @@ import {
 import { authCookie } from '../helpers/auth';
 import { loginAttempts, mfaAttempts } from '../../src/routes/auth';
 import { invalidatePermissionsCache } from '../../src/services/permissions';
+import { uploadToImmich } from '../../src/services/memories/immichService';
+import { uploadToSynology } from '../../src/services/memories/synologyService';
 
 const app: Application = createApp();
 
@@ -951,5 +961,26 @@ describe('Photo upload validation', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('No files uploaded');
+  });
+
+  it('JOURNEY-INT-046 — POST /api/journeys/entries/:id/photos falls back to Synology upload', async () => {
+    const { user } = createUser(testDb);
+    const journey = createJourney(testDb, user.id);
+    const entry = createJourneyEntry(testDb, journey.id, user.id, { entry_date: '2026-04-01' });
+
+    vi.mocked(uploadToImmich).mockResolvedValueOnce(null);
+    vi.mocked(uploadToSynology).mockResolvedValueOnce('120672_120673');
+
+    const fixturePath = path.join(__dirname, '../fixtures/small-image.jpg');
+    const res = await request(app)
+      .post(`/api/journeys/entries/${entry.id}/photos`)
+      .set('Cookie', authCookie(user.id))
+      .attach('photos', fixturePath);
+
+    expect(res.status).toBe(201);
+    expect(res.body.photos[0]).toMatchObject({
+      provider: 'synologyphotos',
+      asset_id: '120672_120673',
+    });
   });
 });

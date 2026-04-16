@@ -31,6 +31,7 @@ interface SystemNoticeState {
   fetching: boolean;
   fetch: () => Promise<void>;
   dismiss: (id: string) => void;
+  reset: () => void;
 }
 
 export const useSystemNoticeStore = create<SystemNoticeState>()((set, get) => ({
@@ -49,6 +50,10 @@ export const useSystemNoticeStore = create<SystemNoticeState>()((set, get) => ({
       console.warn('[systemNotices] failed to fetch:', err);
       set({ loaded: true, fetching: false });
     }
+  },
+
+  reset() {
+    set({ notices: [], loaded: false, fetching: false });
   },
 
   dismiss(id: string) {

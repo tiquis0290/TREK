@@ -151,6 +151,7 @@ export const useAuthStore = create<AuthState>()(
 
   logout: () => {
     disconnect()
+    useSystemNoticeStore.getState().reset()
     // Tell server to clear the httpOnly cookie
     fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
     // Clear service worker caches containing sensitive data

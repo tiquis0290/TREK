@@ -20,7 +20,7 @@ import {
   Laugh, Smile, Meh, Annoyed, Frown,
   Sun, CloudSun, Cloud, CloudRain, CloudLightning, Snowflake, ChevronDown, Eye, EyeOff,
 } from 'lucide-react'
-import type { JourneyEntry, JourneyPhoto, JourneyDetail } from '../store/journeyStore'
+import type { JourneyEntry, JourneyPhoto, JourneyDetail, JourneyTrip } from '../store/journeyStore'
 
 const GRADIENTS = [
   'linear-gradient(135deg, #0F172A 0%, #6366F1 45%, #EC4899 100%)',
@@ -960,7 +960,7 @@ function GalleryView({ entries, journeyId, userId, trips, onPhotoClick, onRefres
           trips={trips}
           existingAssetIds={new Set(entries.flatMap(e => (e.photos || []).filter(p => p.asset_id).map(p => p.asset_id!)))}
           onClose={() => setShowPicker(false)}
-          onAdd={async (assetIds, entryId) => {
+          onAdd={async (assets, entryId) => {
             let targetId = entryId
             if (!targetId) {
               try {
@@ -972,10 +972,37 @@ function GalleryView({ entries, journeyId, userId, trips, onPhotoClick, onRefres
                 targetId = entry.id
               } catch { return }
             }
+            const assetIds = assets.map(a => a.id)
             let added = 0
             try {
-              const result = await journeyApi.addProviderPhotos(targetId, pickerProvider!, assetIds)
-              added = result.added || 0
+              if (pickerProvider === 'synologyphotos') {
+                const groups = new Map<string, { assetIds: string[]; cacheIds: string[] }>()
+                for (const asset of assets) {
+                  const passphraseKey = asset.passphrase || ''
+                  if (!groups.has(passphraseKey)) {
+                    groups.set(passphraseKey, { assetIds: [], cacheIds: [] })
+                  }
+                  const group = groups.get(passphraseKey)!
+                  group.assetIds.push(asset.id)
+                  group.cacheIds.push(asset.cacheKey || '')
+                }
+
+                for (const [passphrase, group] of groups) {
+                  if (!group.assetIds.length) continue
+                  const result = await journeyApi.addProviderPhotos(
+                    targetId,
+                    pickerProvider!,
+                    group.assetIds,
+                    undefined,
+                    passphrase || null,
+                    group.cacheIds,
+                  )
+                  added += result.added || 0
+                }
+              } else {
+                const result = await journeyApi.addProviderPhotos(targetId, pickerProvider!, assetIds)
+                added = result.added || 0
+              }
             } catch {}
             if (added > 0) {
               toast.success(t('journey.photosAdded', { count: added }))
@@ -1443,6 +1470,16 @@ function groupPhotosByDate(photos: any[]): { date: string; label: string; assets
 
 // ── Provider Picker ───────────────────────────────────────────────────────
 
+type ProviderAssetSelection = {
+  id: string
+  cacheKey?: string | null
+  passphrase?: string | null
+}
+
+type ProviderPickerAsset = ProviderAssetSelection & {
+  city?: string | null
+}
+
 function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, onClose, onAdd }: {
   provider: string
   userId: number
@@ -1450,11 +1487,11 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
   trips: JourneyTrip[]
   existingAssetIds: Set<string>
   onClose: () => void
-  onAdd: (assetIds: string[], entryId: number | null) => Promise<void>
+  onAdd: (assets: ProviderAssetSelection[], entryId: number | null) => Promise<void>
 }) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<'trip' | 'custom' | 'all' | 'album'>('trip')
-  const [photos, setPhotos] = useState<any[]>([])
+  const [photos, setPhotos] = useState<ProviderPickerAsset[]>([])
   const [albums, setAlbums] = useState<any[]>([])
   const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -1463,7 +1500,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
   const [searchPage, setSearchPage] = useState(1)
   const [searchFrom, setSearchFrom] = useState('')
   const [searchTo, setSearchTo] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [selected, setSelected] = useState<Map<string, ProviderAssetSelection>>(new Map())
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [targetEntryId, setTargetEntryId] = useState<number | null>(null)
@@ -1501,7 +1538,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
       })
       if (res.ok) {
         const data = await res.json()
-        const assets = data.assets || []
+        const assets = (data.assets || []) as ProviderPickerAsset[]
         setPhotos(prev => append ? [...prev, ...assets] : assets)
         setHasMore(!!data.hasMore)
       } else {
@@ -1525,7 +1562,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
     setHasMore(false)
     try {
       const res = await fetch(`/api/integrations/memories/${provider}/albums/${albumId}/photos`, { credentials: 'include', signal })
-      if (res.ok) setPhotos((await res.json()).assets || [])
+      if (res.ok) setPhotos(((await res.json()).assets || []) as ProviderPickerAsset[])
     } catch (e: any) { if (e.name !== 'AbortError') {} }
     if (!signal.aborted) setLoading(false)
   }
@@ -1552,10 +1589,17 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
     if (customFrom && customTo) searchPhotos(customFrom, customTo)
   }
 
-  const toggleAsset = (id: string) => {
+  const toSelection = (asset: ProviderPickerAsset): ProviderAssetSelection => ({
+    id: asset.id,
+    cacheKey: asset.cacheKey || null,
+    passphrase: asset.passphrase || null,
+  })
+
+  const toggleAsset = (asset: ProviderPickerAsset) => {
     setSelected(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
+      const next = new Map(prev)
+      if (next.has(asset.id)) next.delete(asset.id)
+      else next.set(asset.id, toSelection(asset))
       return next
     })
   }
@@ -1709,17 +1753,25 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
 
         {/* Select all bar — sticky above grid */}
         {!loading && photos.length > 0 && (() => {
-          const selectable = photos.filter((a: any) => !existingAssetIds.has(a.id))
-          const allSelected = selectable.length > 0 && selectable.every((a: any) => selected.has(a.id))
+          const selectable = photos.filter(a => !existingAssetIds.has(a.id))
+          const allSelected = selectable.length > 0 && selectable.every(a => selected.has(a.id))
           if (selectable.length === 0) return null
           return (
             <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
               <button
                 onClick={() => {
                   if (allSelected) {
-                    setSelected(new Set())
+                    setSelected(prev => {
+                      const next = new Map(prev)
+                      for (const asset of selectable) next.delete(asset.id)
+                      return next
+                    })
                   } else {
-                    setSelected(new Set(selectable.map((a: any) => a.id)))
+                    setSelected(prev => {
+                      const next = new Map(prev)
+                      for (const asset of selectable) next.set(asset.id, toSelection(asset))
+                      return next
+                    })
                   }
                 }}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
@@ -1757,13 +1809,13 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
                     {group.label}
                   </p>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5 mb-1">
-                    {group.assets.map((asset: any) => {
+                    {group.assets.map((asset) => {
                       const isSelected = selected.has(asset.id)
                       const alreadyAdded = existingAssetIds.has(asset.id)
                       return (
                         <div
                           key={asset.id}
-                          onClick={() => !alreadyAdded && toggleAsset(asset.id)}
+                          onClick={() => !alreadyAdded && toggleAsset(asset)}
                           className={`relative aspect-square rounded-lg overflow-hidden ${
                             alreadyAdded
                               ? 'opacity-40 cursor-not-allowed'
@@ -1773,13 +1825,13 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
                           }`}
                         >
                           <img
-                            src={`/api/integrations/memories/${provider}/assets/0/${asset.id}/${userId}/thumbnail`}
+                            src={`/api/integrations/memories/${provider}/assets/0/${asset.id}/${userId}/thumbnail${provider === 'synologyphotos' ? `?cache_key=${asset.cacheKey}${asset.passphrase ? `&passphrase=${asset.passphrase}` : ''}` : ''}`}
                             alt=""
                             className="w-full h-full object-cover"
                             loading="lazy"
                             onError={e => {
                               const img = e.currentTarget
-                              const original = `/api/integrations/memories/${provider}/assets/0/${asset.id}/${userId}/original`
+                              const original = `/api/integrations/memories/${provider}/assets/0/${asset.id}/${userId}/original${provider === 'synologyphotos' ? `?cache_key=${asset.cacheKey}${asset.passphrase ? `&passphrase=${asset.passphrase}` : ''}` : ''}`
                               if (!img.src.includes('/original')) img.src = original
                             }}
                           />
@@ -1821,7 +1873,10 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
               {t('common.cancel')}
             </button>
             <button
-              onClick={() => onAdd([...selected], targetEntryId)}
+              onClick={() => {
+                const selectedAssets = Array.from(selected.values())
+                onAdd(selectedAssets, targetEntryId)
+              }}
               disabled={selected.size === 0}
               className="px-3.5 py-2 rounded-lg bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[13px] font-medium hover:bg-zinc-800 dark:hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed"
             >

@@ -80,7 +80,7 @@ router.get('/albums', authenticate, async (req: Request, res: Response) => {
 
 router.get('/albums/:albumId/photos', authenticate, async (req: Request, res: Response) => {
     const authReq = req as AuthRequest;
-    handleServiceResult(res, await getSynologyAlbumPhotos(authReq.user.id, req.params.albumId));
+    handleServiceResult(res, await getSynologyAlbumPhotos(authReq.user.id, req.params.albumId, req.query.count ? Number(req.query.count) : null));
 });
 
 router.post('/trips/:tripId/album-links/:linkId/sync', authenticate, async (req: Request, res: Response) => {

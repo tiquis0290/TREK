@@ -1561,7 +1561,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
     setPhotos([])
     setHasMore(false)
     try {
-      const res = await fetch(`/api/integrations/memories/${provider}/albums/${albumId}/photos`, { credentials: 'include', signal })
+      const res = await fetch(`/api/integrations/memories/${provider}/albums/${albumId}/photos${provider === 'synologyphotos' ? `?count=${albums.find(a => a.id === albumId)?.assetCount}` : ''}`, { credentials: 'include', signal })
       if (res.ok) setPhotos(((await res.json()).assets || []) as ProviderPickerAsset[])
     } catch (e: any) { if (e.name !== 'AbortError') {} }
     if (!signal.aborted) setLoading(false)

@@ -454,12 +454,14 @@ export async function listSynologyAlbums(userId: number): Promise<ServiceResult<
 }
 
 
-export async function getSynologyAlbumPhotos(userId: number, albumId: string): Promise<ServiceResult<AssetsList>> {
+export async function getSynologyAlbumPhotos(userId: number, albumId: string, count?: number): Promise<ServiceResult<AssetsList>> {
     const allItems: SynologyPhotoItem[] = [];
-    const pageSize = 1000;
+    const pageSize = 500;
     let offset = 0;
+    if (!count) count = 1000;
 
     while (true) {
+        let limit = offset < count + 50 ? Math.min(count + 50 - offset, 1000) : pageSize; // first request uses the count from the client, subsequent requests page through the rest of the album
         const result = await _requestSynologyApi<{ list: SynologyPhotoItem[] }>(userId, {
             api: 'SYNO.Foto.Browse.Item',
             method: 'list',
@@ -473,8 +475,8 @@ export async function getSynologyAlbumPhotos(userId: number, albumId: string): P
         if (!result.success) return result as ServiceResult<AssetsList>;
         const items = result.data.list || [];
         allItems.push(...items);
-        if (items.length < pageSize) break;
-        offset += pageSize;
+        if (items.length < limit) break;
+        offset += items.length;
     }
 
     const assets = allItems.map(item => ({

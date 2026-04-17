@@ -897,61 +897,76 @@ export default function DashboardPage(): React.ReactElement {
             </button>
           </div>
 
-          {/* Desktop header */}
-          <div className="hidden md:flex" style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' }}>{t('dashboard.title')}</h1>
-              <p style={{ margin: '3px 0 0', fontSize: 13, color: '#9ca3af' }}>
+          {/* Desktop header — unified toolbar */}
+          <div className="hidden md:block" style={{ marginBottom: 20 }}>
+            <div style={{
+              background: 'var(--bg-tertiary)', borderRadius: 18,
+              border: '1px solid var(--border-primary)',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+              padding: '14px 16px 14px 22px',
+              display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+            }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', flexShrink: 0 }}>
+                {t('dashboard.title')}
+              </h2>
+              <div style={{ width: 1, height: 22, background: 'var(--border-faint)', flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                 {isLoading ? t('common.loading')
                   : trips.length > 0 ? `${t(trips.length !== 1 ? 'dashboard.subtitle.activeMany' : 'dashboard.subtitle.activeOne', { count: trips.length })}${archivedTrips.length > 0 ? t('dashboard.subtitle.archivedSuffix', { count: archivedTrips.length }) : ''}`
                   : t('dashboard.subtitle.empty')}
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
-              {/* View mode toggle */}
-              <button
-                onClick={toggleViewMode}
-                title={viewMode === 'grid' ? t('dashboard.listView') : t('dashboard.gridView')}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0 14px', height: 37,
-                  background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 12,
-                  cursor: 'pointer', color: 'var(--text-faint)', fontFamily: 'inherit',
-                  transition: 'background 0.15s, border-color 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--text-faint)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-card)'; e.currentTarget.style.borderColor = 'var(--border-primary)' }}
-              >
-                {viewMode === 'grid' ? <List size={15} /> : <LayoutGrid size={15} />}
-              </button>
-              {/* Widget settings */}
-              <button
-                onClick={() => setShowWidgetSettings(s => s ? false : true)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0 14px', height: 37,
-                  background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 12,
-                  cursor: 'pointer', color: 'var(--text-faint)', fontFamily: 'inherit',
-                  transition: 'background 0.15s, border-color 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--text-faint)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-card)'; e.currentTarget.style.borderColor = 'var(--border-primary)' }}
-              >
-                <Settings size={15} />
-              </button>
-              {can('trip_create') && <button
-                onClick={() => { setEditingTrip(null); setShowForm(true) }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px',
-                  background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 12,
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                }}
-                onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >
-              <Plus size={15} /> {t('dashboard.newTrip')}
-              </button>}
+              </span>
+
+              <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginLeft: 'auto', flexShrink: 0 }}>
+                <button
+                  onClick={toggleViewMode}
+                  title={viewMode === 'grid' ? t('dashboard.listView') : t('dashboard.gridView')}
+                  style={{
+                    appearance: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '7px 11px', borderRadius: 99,
+                    background: 'transparent', color: 'var(--text-muted)',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-card)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}
+                >
+                  {viewMode === 'grid' ? <List size={15} /> : <LayoutGrid size={15} />}
+                </button>
+                <button
+                  onClick={() => setShowWidgetSettings(s => s ? false : true)}
+                  title={t('dashboard.widgets') || 'Widgets'}
+                  style={{
+                    appearance: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '7px 11px', borderRadius: 99,
+                    background: showWidgetSettings ? 'var(--bg-card)' : 'transparent',
+                    color: showWidgetSettings ? 'var(--text-primary)' : 'var(--text-muted)',
+                    boxShadow: showWidgetSettings ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { if (!showWidgetSettings) { e.currentTarget.style.background = 'var(--bg-card)'; e.currentTarget.style.color = 'var(--text-primary)' } }}
+                  onMouseLeave={e => { if (!showWidgetSettings) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' } }}
+                >
+                  <Settings size={15} />
+                </button>
+                {can('trip_create') && (
+                  <button
+                    onClick={() => { setEditingTrip(null); setShowForm(true) }}
+                    style={{
+                      appearance: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '9px 14px', borderRadius: 10, fontSize: 13, fontWeight: 500,
+                      background: 'var(--accent)', color: 'var(--accent-text)', flexShrink: 0,
+                      marginLeft: 2,
+                      transition: 'opacity 0.15s ease',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                  >
+                    <Plus size={14} strokeWidth={2.5} /> {t('dashboard.newTrip')}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

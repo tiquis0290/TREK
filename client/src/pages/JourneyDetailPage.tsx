@@ -1021,7 +1021,7 @@ function GalleryView({ entries, journeyId, userId, trips, onPhotoClick, onRefres
           trips={trips}
           existingAssetIds={new Set(entries.flatMap(e => (e.photos || []).filter(p => p.asset_id).map(p => p.asset_id!)))}
           onClose={() => setShowPicker(false)}
-          onAdd={async (assetIds, entryId) => {
+          onAdd={async (assetIds, entryId, passphrase) => {
             let targetId = entryId
             if (!targetId) {
               try {
@@ -1035,7 +1035,7 @@ function GalleryView({ entries, journeyId, userId, trips, onPhotoClick, onRefres
             }
             let added = 0
             try {
-              const result = await journeyApi.addProviderPhotos(targetId, pickerProvider!, assetIds)
+              const result = await journeyApi.addProviderPhotos(targetId, pickerProvider!, assetIds, undefined, passphrase)
               added = result.added || 0
             } catch {}
             if (added > 0) {
@@ -1511,7 +1511,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
   trips: JourneyTrip[]
   existingAssetIds: Set<string>
   onClose: () => void
-  onAdd: (assetIds: string[], entryId: number | null) => Promise<void>
+  onAdd: (assetIds: string[], entryId: number | null, passphrase?: string) => Promise<void>
 }) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<'trip' | 'custom' | 'all' | 'album'>('trip')
@@ -1884,7 +1884,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
               {t('common.cancel')}
             </button>
             <button
-              onClick={() => onAdd([...selected], targetEntryId)}
+              onClick={() => onAdd([...selected], targetEntryId, selectedAlbumPassphrase)}
               disabled={selected.size === 0}
               className="px-3.5 py-2 rounded-lg bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[13px] font-medium hover:bg-zinc-800 dark:hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed"
             >

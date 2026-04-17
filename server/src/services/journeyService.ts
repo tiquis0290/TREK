@@ -628,12 +628,12 @@ export function addPhoto(entryId: number, userId: number, filePath: string, thum
   return db.prepare(`SELECT ${JP_SELECT} FROM ${JP_JOIN} WHERE jp.id = ?`).get(Number(res.lastInsertRowid)) as JourneyPhoto;
 }
 
-export function addProviderPhoto(entryId: number, userId: number, provider: string, assetId: string, caption?: string): JourneyPhoto | null {
+export function addProviderPhoto(entryId: number, userId: number, provider: string, assetId: string, caption?: string, passphrase?: string): JourneyPhoto | null {
   const entry = db.prepare('SELECT * FROM journey_entries WHERE id = ?').get(entryId) as JourneyEntry | undefined;
   if (!entry) return null;
   if (!canEdit(entry.journey_id, userId)) return null;
 
-  const trekPhotoId = getOrCreateTrekPhoto(provider, assetId, userId);
+  const trekPhotoId = getOrCreateTrekPhoto(provider, assetId, userId, passphrase);
 
   // skip if already added
   const exists = db.prepare('SELECT 1 FROM journey_photos WHERE entry_id = ? AND photo_id = ?').get(entryId, trekPhotoId);

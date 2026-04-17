@@ -1412,3 +1412,24 @@ describe('Edge cases', () => {
     expect(filledRow.source_place_id).toBeNull();
   });
 });
+
+// -- Passphrase on addProviderPhoto -------------------------------------------
+
+describe('addProviderPhoto — passphrase', () => {
+  it('JOURNEY-SVC-088: addProviderPhoto with passphrase stores encrypted value on trek_photos', () => {
+    const { user } = createUser(testDb);
+    const journey = createJourney(testDb, user.id);
+    const entry = createJourneyEntry(testDb, journey.id, user.id, { entry_date: '2026-03-15' });
+
+    const photo = addProviderPhoto(entry.id, user.id, 'synologyphotos', 'pp-asset-1', undefined, 'secret-pp');
+
+    expect(photo).not.toBeNull();
+
+    const row = testDb.prepare('SELECT passphrase FROM trek_photos WHERE provider = ? AND asset_id = ? AND owner_id = ?')
+      .get('synologyphotos', 'pp-asset-1', user.id) as { passphrase: string | null } | undefined;
+    expect(row?.passphrase).not.toBeNull();
+    expect(typeof row?.passphrase).toBe('string');
+    // stored value must be encrypted (not plaintext)
+    expect(row?.passphrase).not.toBe('secret-pp');
+  });
+});

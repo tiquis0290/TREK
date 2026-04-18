@@ -873,7 +873,7 @@ const de: Record<string, string | { name: string; category: string }[]> = {
 
   // Trip Planner
   'trip.tabs.plan': 'Karte',
-  'trip.tabs.transports': 'Transporte',
+  'trip.tabs.transports': 'Transport',
   'trip.tabs.reservations': 'Buchungen',
   'trip.tabs.reservationsShort': 'Buchung',
   'trip.tabs.packing': 'Liste',

@@ -212,6 +212,7 @@ export interface Settings {
   show_place_description: boolean
   route_calculation?: boolean
   blur_booking_codes?: boolean
+  map_booking_labels?: boolean
 }
 
 export interface AssignmentsMap {

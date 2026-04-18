@@ -18,7 +18,7 @@ let byIata: Map<string, Airport> | null = null;
 
 function load(): Airport[] {
   if (cache) return cache;
-  const file = path.join(__dirname, '..', '..', 'data', 'airports.json');
+  const file = path.join(__dirname, '..', '..', 'assets', 'airports.json');
   if (!fs.existsSync(file)) {
     console.warn('[airports] airports.json missing — run `node scripts/build-airports.mjs`');
     cache = [];

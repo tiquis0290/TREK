@@ -416,15 +416,10 @@ describe('DashboardPage', () => {
         expect(screen.getAllByText('Paris Adventure').length).toBeGreaterThan(0);
       });
 
-      // Find settings button — it's the gear icon button without title or text
+      // Find settings button — the gear icon button (icon-only, no visible label)
       const allBtns = screen.getAllByRole('button');
-      const settingsButton = allBtns.find(
-        btn => {
-          const title = btn.getAttribute('title');
-          const text = btn.textContent?.trim() || '';
-          // Settings gear: no title, no meaningful text, not the notification bell
-          return !title && !text && btn.querySelector('.lucide-settings');
-        }
+      const settingsButton = allBtns.find(btn =>
+        btn.querySelector('.lucide-settings') && !btn.textContent?.trim()
       );
 
       expect(settingsButton).toBeDefined();
@@ -646,14 +641,10 @@ describe('DashboardPage', () => {
         expect(screen.getAllByText('Paris Adventure').length).toBeGreaterThan(0);
       });
 
-      // Open widget settings
+      // Open widget settings — gear icon button (icon-only, no visible label)
       const allBtns = screen.getAllByRole('button');
-      const settingsButton = allBtns.find(
-        btn => {
-          const title = btn.getAttribute('title');
-          const text = btn.textContent?.trim() || '';
-          return !title && !text && btn.querySelector('.lucide-settings');
-        }
+      const settingsButton = allBtns.find(btn =>
+        btn.querySelector('.lucide-settings') && !btn.textContent?.trim()
       );
 
       expect(settingsButton).toBeDefined();

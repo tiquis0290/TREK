@@ -17,7 +17,6 @@ client/public/icons/*.png
 
 # User data
 server/data/*
-!server/data/airports.json
 server/uploads/
 
 # Environment

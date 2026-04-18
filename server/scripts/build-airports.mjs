@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build server/data/airports.json from OurAirports (davidmegginson.github.io/ourairports-data).
+// Build server/assets/airports.json from OurAirports (davidmegginson.github.io/ourairports-data).
 // License: Public Domain. Keeps large/medium airports with an IATA code; timezone derived from coords via tz-lookup.
 
 import fs from 'node:fs'
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import tzLookup from 'tz-lookup'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const OUT = path.join(__dirname, '..', 'data', 'airports.json')
+const OUT = path.join(__dirname, '..', 'assets', 'airports.json')
 const SRC = 'https://davidmegginson.github.io/ourairports-data/airports.csv'
 
 function fetchText(url) {

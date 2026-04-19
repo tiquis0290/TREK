@@ -2195,6 +2195,7 @@ const ru: Record<string, string> = {
   'oauth.scope.group.vacay': 'Отпуск',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': 'Погода',
+  'oauth.scope.group.journey': 'Путешествия',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': 'Просмотр поездок и маршрутов',
@@ -2245,6 +2246,12 @@ const ru: Record<string, string> = {
   'oauth.scope.geo:read.description': 'Поиск мест, разрешение URL карт и обратное геокодирование координат',
   'oauth.scope.weather:read.label': 'Прогнозы погоды',
   'oauth.scope.weather:read.description': 'Получение прогнозов погоды для мест и дат поездки',
+  'oauth.scope.journey:read.label': 'Просмотр путешествий',
+  'oauth.scope.journey:read.description': 'Чтение путешествий, записей и списка участников',
+  'oauth.scope.journey:write.label': 'Управление путешествиями',
+  'oauth.scope.journey:write.description': 'Создание, обновление и удаление путешествий и их записей',
+  'oauth.scope.journey:share.label': 'Управление ссылками на путешествия',
+  'oauth.scope.journey:share.description': 'Создание, обновление и отзыв публичных ссылок для путешествий',
 
   // System notices
   'system_notice.welcome_v1.title': 'Добро пожаловать в TREK',

@@ -38,6 +38,7 @@ You are connected to TREK, a travel planning application. Below is a compact ref
 - **Collab note / poll / message** — shared notes, decision polls, and chat messages for group trips.
 - **Atlas** — global travel journal: bucket list, visited countries and regions.
 - **Vacay** — vacation-day planner that tracks leave across team members and years.
+- **Journey** — cross-trip travel narrative with dated entries, contributors, and share links. Requires the Journey addon.
 
 ## Key workflows
 
@@ -75,6 +76,7 @@ The following features are optional and may not be available on every TREK insta
 - **Collab** — shared notes, polls, and chat messages for group trips.
 - **Atlas** — bucket list and visited-country/region tracking.
 - **Vacay** — team vacation-day planner with public holiday integration.
+- **Journey** — cross-trip travel narrative with entries, contributors, and share links.
 
 ## Behavioral rules
 

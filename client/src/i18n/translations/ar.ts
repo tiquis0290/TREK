@@ -1992,6 +1992,7 @@ const ar: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.group.vacay': 'الإجازة',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': 'الطقس',
+  'oauth.scope.group.journey': 'مذكرة السفر',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': 'عرض الرحلات وخطط السفر',
@@ -2042,6 +2043,12 @@ const ar: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.geo:read.description': 'البحث عن مواقع وحل عناوين الخرائط والترميز الجغرافي العكسي للإحداثيات',
   'oauth.scope.weather:read.label': 'توقعات الطقس',
   'oauth.scope.weather:read.description': 'جلب توقعات الطقس لمواقع الرحلة وتواريخها',
+  'oauth.scope.journey:read.label': 'عرض مذكرات السفر',
+  'oauth.scope.journey:read.description': 'قراءة مذكرات السفر والمدخلات وقائمة المساهمين',
+  'oauth.scope.journey:write.label': 'إدارة مذكرات السفر',
+  'oauth.scope.journey:write.description': 'إنشاء مذكرات السفر وتحديثها وحذفها وإدخالاتها',
+  'oauth.scope.journey:share.label': 'إدارة روابط مذكرات السفر',
+  'oauth.scope.journey:share.description': 'إنشاء روابط مشاركة عامة لمذكرات السفر وتحديثها وإلغاؤها',
 
   // System notices
   'system_notice.welcome_v1.title': 'مرحبًا بك في TREK',

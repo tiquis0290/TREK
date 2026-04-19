@@ -140,13 +140,17 @@ that match your granted scopes for that session.
 | `vacay:write` | Manage vacation plans | Vacation |
 | `geo:read` | Maps & geocoding | Geo |
 | `weather:read` | Weather forecasts | Weather |
+| `journey:read` | View journeys | Journey |
+| `journey:write` | Manage journeys | Journey |
+| `journey:share` | Manage journey share links | Journey |
 
 **Scope rules:**
 - A `:write` scope implies `:read` access for the same group (e.g. `budget:write` also grants budget read access).
 - Any `trips:*` scope (`trips:read`, `trips:write`, `trips:delete`, or `trips:share`) grants trip read access.
+- Any `journey:*` scope (`journey:read`, `journey:write`, or `journey:share`) grants journey read access.
 - `list_trips` and `get_trip_summary` are **always available** regardless of scopes — they are navigation tools.
 - Static tokens and web session JWTs have full access to all tools (equivalent to all scopes).
-- Addon-gated tools (Atlas Extended, Collab, Vacay) require both the relevant scope **and** the addon to be enabled.
+- Addon-gated tools (Atlas, Collab, Vacay, Journey) require both the relevant scope **and** the addon to be enabled.
 
 ---
 
@@ -167,7 +171,7 @@ that match your granted scopes for that session.
 | **OAuth scope enforcement**             | Only tools matching your granted OAuth scopes are registered in the session. Calling an out-of-scope tool returns an error.                      |
 | **Addon toggle invalidation**           | When an admin enables or disables an addon, all active MCP sessions are invalidated and must be re-established.                                  |
 | **Real-time sync**                      | Changes made through MCP are broadcast to all connected clients in real-time via WebSocket, just like changes made through the web UI.           |
-| **Addon-gated features**                | Some resources and tools are only available when the corresponding addon (Atlas, Collab, Vacay) is enabled by an admin.                          |
+| **Addon-gated features**                | Some resources and tools are only available when the corresponding addon (Atlas, Collab, Vacay, Journey) is enabled by an admin.                 |
 
 ---
 
@@ -194,7 +198,6 @@ making changes.
 | Accommodations        | `trek://trips/{tripId}/accommodations`          | Hotels/rentals with check-in/out details                                              |
 | Members               | `trek://trips/{tripId}/members`                 | Owner and collaborators                                                               |
 | Collab Notes          | `trek://trips/{tripId}/collab-notes`            | Shared collaborative notes                                                            |
-| Files                 | `trek://trips/{tripId}/files`                   | Files attached to a trip (excludes trashed files)                                     |
 | To-Dos                | `trek://trips/{tripId}/todos`                   | To-do items ordered by position                                                       |
 | Categories            | `trek://categories`                             | Available place categories (for use when creating places)                             |
 | Bucket List           | `trek://bucket-list`                            | Your personal travel bucket list                                                      |
@@ -214,6 +217,10 @@ These resources are only available when the corresponding addon is enabled by an
 | Vacay Plan            | `trek://vacay/plan`                             | Vacay    | Full snapshot of your active vacation plan (members, years, config) |
 | Vacay Entries         | `trek://vacay/entries/{year}`                   | Vacay    | All vacation day entries for the active plan and a specific year    |
 | Vacay Holidays        | `trek://vacay/holidays/{year}`                  | Vacay    | Public holidays for the plan's configured region and year           |
+| Journeys              | `trek://journeys`                               | Journey  | All journeys owned or contributed to by the current user            |
+| Journey Detail        | `trek://journeys/{journeyId}`                   | Journey  | Single journey with entries, contributors, and linked trips         |
+| Journey Entries       | `trek://journeys/{journeyId}/entries`           | Journey  | All entries in a journey (date, text, mood, linked trip)            |
+| Journey Contributors  | `trek://journeys/{journeyId}/contributors`      | Journey  | Contributors (owner and collaborators) of a journey                 |
 
 ---
 
@@ -226,7 +233,7 @@ trip in a single call.
 
 | Tool               | Description                                                                                                                                                                                                           |
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `get_trip_summary` | Full denormalized snapshot of a trip: metadata, members, days with assignments and notes, accommodations, budget, packing, reservations, collab notes, to-dos, files, and poll/message counts. Use this as your context loader. |
+| `get_trip_summary` | Full denormalized snapshot of a trip: metadata, members, days with assignments and notes, accommodations, budget, packing, reservations, collab notes, to-dos, and poll/message counts. Use this as your context loader. |
 
 ### Trips
 
@@ -249,12 +256,14 @@ trip in a single call.
 
 | Tool             | Description                                                                                      |
 |------------------|--------------------------------------------------------------------------------------------------|
-| `list_places`    | List places/POIs in a trip, optionally filtered by assignment status, category, tag, or search.  |
-| `create_place`   | Add a place/POI with name, coordinates, address, category, notes, website, phone, and optional `google_place_id` / `osm_id` for opening hours. |
-| `update_place`   | Update any field of an existing place including transport mode, timing, and price.               |
-| `delete_place`   | Remove a place from a trip.                                                                      |
-| `list_categories`| List all available place categories with id, name, icon and color.                              |
-| `search_place`   | Search for a real-world place by name or address. Returns `osm_id` and `google_place_id` for use in `create_place`. |
+| `list_places`              | List places/POIs in a trip, optionally filtered by assignment status, category, tag, or search.  |
+| `create_place`             | Add a place/POI with name, coordinates, address, category, notes, website, phone, and optional `google_place_id` / `osm_id` for opening hours. |
+| `update_place`             | Update any field of an existing place including transport mode, timing, and price.               |
+| `delete_place`             | Remove a place from a trip.                                                                      |
+| `bulk_delete_places`       | Delete multiple places at once by ID. Removes all day assignments as well. **Cannot be undone.** |
+| `import_places_from_url`   | Import all places from a publicly shared Google Maps or Naver Maps list URL.                     |
+| `list_categories`          | List all available place categories with id, name, icon and color.                              |
+| `search_place`             | Search for a real-world place by name or address. Returns `osm_id` and `google_place_id` for use in `create_place`. |
 
 ### Day Planning
 
@@ -279,15 +288,27 @@ trip in a single call.
 | `update_accommodation` | Update fields on an existing accommodation (dates, times, confirmation, notes).          |
 | `delete_accommodation` | Delete an accommodation record from a trip.                                              |
 
+### Transport
+
+Transport bookings (flights, trains, cars, cruises) support multi-stop `endpoints[]` — each endpoint has a `role` (`from`/`to`/`stop`), name, optional IATA `code` (for flights), coordinates, timezone, and local time. Use `search_airports` to resolve airport names to IATA codes before creating a flight.
+
+| Tool                   | Description                                                                                                                                           |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `create_transport`     | Create a transport booking (`flight`, `train`, `car`, `cruise`) with optional endpoints, departure/arrival times, and confirmation details. Created as pending. |
+| `update_transport`     | Update an existing transport booking. Pass `endpoints[]` to replace the full stop list. Use `status: "confirmed"` to confirm.                        |
+| `delete_transport`     | Delete a transport booking from a trip.                                                                                                               |
+
 ### Reservations
 
-| Tool                       | Description                                                                                                                                                                                   |
-|----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `create_reservation`       | Create a pending reservation. Supports flights, hotels, restaurants, trains, cars, cruises, events, tours, activities, and other types. Hotels can be linked to places and check-in/out days. |
-| `update_reservation`       | Update any field including status (`pending` / `confirmed` / `cancelled`).                                                                                                                    |
-| `delete_reservation`       | Delete a reservation and its linked accommodation record if applicable.                                                                                                                       |
-| `reorder_reservations`     | Update the display order of reservations within a day.                                                                                                                                        |
-| `link_hotel_accommodation` | Set or update a hotel reservation's check-in/out day links and associated place.                                                                                                              |
+For flights, trains, cars, and cruises, use the **Transport** tools above. Reservations cover all other booking types.
+
+| Tool                       | Description                                                                                                                              |
+|----------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| `create_reservation`       | Create a pending reservation. Supports hotels, restaurants, events, tours, activities, and other types. Hotels can be linked to places and check-in/out days. |
+| `update_reservation`       | Update any field including status (`pending` / `confirmed` / `cancelled`).                                                               |
+| `delete_reservation`       | Delete a reservation and its linked accommodation record if applicable.                                                                  |
+| `reorder_reservations`     | Update the display order of reservations (and transports) within a day.                                                                  |
+| `link_hotel_accommodation` | Set or update a hotel reservation's check-in/out day links and associated place.                                                         |
 
 ### Budget
 
@@ -370,7 +391,14 @@ trip in a single call.
 | `get_weather`         | Get weather forecast for a location and date.                                                       |
 | `get_detailed_weather`| Get hourly/detailed weather forecast for a location and date.                                       |
 
-### Collab Notes
+### Airports
+
+| Tool              | Description                                                                                                       |
+|-------------------|-------------------------------------------------------------------------------------------------------------------|
+| `search_airports` | Search for airports by name, city, or IATA code. Returns IATA code, name, city, country, coordinates, timezone.  |
+| `get_airport`     | Look up a single airport by IATA code (e.g. `"ZRH"`, `"AMS"`, `"CDG"`).                                         |
+
+### Collab Notes _(Collab addon required)_
 
 | Tool                 | Description                                                                                     |
 |----------------------|-------------------------------------------------------------------------------------------------|
@@ -392,14 +420,14 @@ trip in a single call.
 | `delete_collab_message`| Delete a chat message (own messages only).                                              |
 | `react_collab_message`| Toggle a reaction emoji on a chat message.                                               |
 
-### Bucket List
+### Bucket List _(Atlas addon required)_
 
 | Tool                      | Description                                                                                |
 |---------------------------|--------------------------------------------------------------------------------------------|
 | `create_bucket_list_item` | Add a destination to your personal bucket list with optional coordinates and country code. |
 | `delete_bucket_list_item` | Remove an item from your bucket list.                                                      |
 
-### Atlas
+### Atlas _(Atlas addon required)_
 
 | Tool                     | Description                                                                     |
 |--------------------------|---------------------------------------------------------------------------------|
@@ -443,6 +471,33 @@ trip in a single call.
 | `delete_holiday_calendar`  | Remove a holiday calendar from the vacation plan.                                     |
 | `list_holiday_countries`   | List countries available for public holiday calendars.                                |
 | `list_holidays`            | List public holidays for a country and year.                                          |
+
+### Journey _(Journey addon required)_
+
+| Tool                              | Description                                                                                                |
+|-----------------------------------|------------------------------------------------------------------------------------------------------------|
+| `list_journeys`                   | List all journeys owned or contributed to by the current user.                                             |
+| `get_journey`                     | Get a full snapshot of a journey: metadata, entries, contributors, and linked trips.                       |
+| `create_journey`                  | Create a new journey with title, optional subtitle, and an initial list of trip IDs.                       |
+| `update_journey`                  | Update a journey's title, subtitle, or status.                                                             |
+| `delete_journey`                  | Delete a journey.                                                                                          |
+| `add_journey_trip`                | Link an existing trip to a journey.                                                                        |
+| `remove_journey_trip`             | Remove a trip from a journey.                                                                              |
+| `list_journey_entries`            | List all entries in a journey (date, text, mood, linked trip).                                             |
+| `create_journey_entry`            | Add an entry to a journey with optional title, body text, date, linked trip, and sort order.               |
+| `update_journey_entry`            | Edit a journey entry's title, body, date, or mood.                                                         |
+| `delete_journey_entry`            | Remove an entry from a journey.                                                                            |
+| `reorder_journey_entries`         | Reorder entries in a journey by providing the new ordered list of entry IDs.                               |
+| `list_journey_contributors`       | List the contributors of a journey (owner and invited editors/viewers).                                    |
+| `add_journey_contributor`         | Invite a user to a journey with `editor` or `viewer` role.                                                 |
+| `update_journey_contributor_role` | Change a contributor's role between `editor` and `viewer`.                                                 |
+| `remove_journey_contributor`      | Remove a contributor from a journey.                                                                       |
+| `update_journey_preferences`      | Update display preferences for a journey (e.g. hide skeleton entries).                                     |
+| `get_journey_suggestions`         | Get suggested trips to add to journeys (based on recent trip history).                                     |
+| `list_journey_available_trips`    | List all trips available to the current user for linking to a journey.                                     |
+| `get_journey_share_link`          | Get the current public share link for a journey.                                                           |
+| `create_journey_share_link`       | Create or update the public share link for a journey.                                                      |
+| `delete_journey_share_link`       | Revoke the public share link for a journey.                                                                |
 
 ---
 

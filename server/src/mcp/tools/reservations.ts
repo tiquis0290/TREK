@@ -22,11 +22,11 @@ export function registerReservationTools(server: McpServer, userId: number, scop
   server.registerTool(
     'create_reservation',
     {
-      description: 'Recommend a reservation for a trip. Created as pending — the user must confirm it. Linking: hotel → use place_id + start_day_id + end_day_id (all three required to create the accommodation link); restaurant/train/car/cruise/event/tour/activity/other → use assignment_id; flight → no linking.',
+      description: 'Recommend a reservation for a trip. Created as pending — the user must confirm it. For flights, trains, cars, and cruises, use create_transport instead. Linking: hotel → use place_id + start_day_id + end_day_id (all three required to create the accommodation link); restaurant/event/tour/activity/other → use assignment_id.',
       inputSchema: {
         tripId: z.number().int().positive(),
         title: z.string().min(1).max(200),
-        type: z.enum(['flight', 'hotel', 'restaurant', 'train', 'car', 'cruise', 'event', 'tour', 'activity', 'other']).describe('Reservation type: "flight", "hotel", "restaurant", "train", "car", "cruise", "event", "tour", "activity", or "other"'),
+        type: z.enum(['hotel', 'restaurant', 'event', 'tour', 'activity', 'other']).describe('Reservation type: "hotel", "restaurant", "event", "tour", "activity", or "other"'),
         reservation_time: z.string().optional().describe('ISO 8601 datetime or time string'),
         location: z.string().max(500).optional(),
         confirmation_number: z.string().max(100).optional(),
@@ -78,12 +78,12 @@ export function registerReservationTools(server: McpServer, userId: number, scop
   server.registerTool(
     'update_reservation',
     {
-      description: 'Update an existing reservation in a trip. Use status "confirmed" to confirm a pending recommendation, or "pending" to revert it. Linking: hotel → use place_id to link to an accommodation place; restaurant/train/car/cruise/event/tour/activity/other → use assignment_id to link to a day assignment; flight → no linking.',
+      description: 'Update an existing reservation in a trip. Use status "confirmed" to confirm a pending recommendation, or "pending" to revert it. For flights, trains, cars, and cruises, use update_transport instead. Linking: hotel → use place_id to link to an accommodation place; restaurant/event/tour/activity/other → use assignment_id to link to a day assignment.',
       inputSchema: {
         tripId: z.number().int().positive(),
         reservationId: z.number().int().positive(),
         title: z.string().min(1).max(200).optional(),
-        type: z.enum(['flight', 'hotel', 'restaurant', 'train', 'car', 'cruise', 'event', 'tour', 'activity', 'other']).optional().describe('Reservation type: "flight", "hotel", "restaurant", "train", "car", "cruise", "event", "tour", "activity", or "other"'),
+        type: z.enum(['hotel', 'restaurant', 'event', 'tour', 'activity', 'other']).optional().describe('Reservation type: "hotel", "restaurant", "event", "tour", "activity", or "other"'),
         reservation_time: z.string().optional().describe('ISO 8601 datetime or time string'),
         location: z.string().max(500).optional(),
         confirmation_number: z.string().max(100).optional(),

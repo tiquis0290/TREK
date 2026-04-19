@@ -27,6 +27,9 @@ export const SCOPES = {
   VACAY_WRITE:         'vacay:write',
   GEO_READ:            'geo:read',
   WEATHER_READ:        'weather:read',
+  JOURNEY_READ:        'journey:read',
+  JOURNEY_WRITE:       'journey:write',
+  JOURNEY_SHARE:       'journey:share',
 } as const;
 
 export type Scope = typeof SCOPES[keyof typeof SCOPES];
@@ -64,6 +67,9 @@ export const SCOPE_INFO: Record<Scope, ScopeInfo> = {
   'vacay:write':         { label: 'Manage vacation plans',      description: 'Create and manage vacation entries, holidays, and team plans',          group: 'Vacation' },
   'geo:read':            { label: 'Maps & geocoding',           description: 'Search locations, resolve map URLs, and reverse geocode coordinates',  group: 'Geo' },
   'weather:read':        { label: 'Weather forecasts',          description: 'Fetch weather forecasts for trip locations and dates',                  group: 'Weather' },
+  'journey:read':        { label: 'View journeys',              description: 'Read journeys, entries, and contributor list',                          group: 'Journey' },
+  'journey:write':       { label: 'Manage journeys',            description: 'Create, update, and delete journeys and their entries',                 group: 'Journey' },
+  'journey:share':       { label: 'Manage journey links',       description: 'Create, update, and revoke public share links for journeys',            group: 'Journey' },
 };
 
 // ---------------------------------------------------------------------------
@@ -99,6 +105,12 @@ export function canDeleteTrips(scopes: string[] | null): boolean {
 export function canShareTrips(scopes: string[] | null): boolean {
   if (!scopes) return true;
   return scopes.includes('trips:share');
+}
+
+/** journey:share is a separate scope for managing public share links for journeys */
+export function canShareJourneys(scopes: string[] | null): boolean {
+  if (!scopes) return true;
+  return scopes.includes('journey:share');
 }
 
 export function validateScopes(requestedScopes: string[]): { valid: boolean; invalid: string[] } {

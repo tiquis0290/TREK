@@ -2195,6 +2195,7 @@ const nl: Record<string, string> = {
   'oauth.scope.group.vacay': 'Vakantie',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': 'Weer',
+  'oauth.scope.group.journey': 'Reisverslag',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': 'Reizen en reisplannen bekijken',
@@ -2245,6 +2246,12 @@ const nl: Record<string, string> = {
   'oauth.scope.geo:read.description': 'Locaties zoeken, kaart-URL\'s oplossen en coördinaten omgekeerd geocoderen',
   'oauth.scope.weather:read.label': 'Weersverwachtingen',
   'oauth.scope.weather:read.description': 'Weersverwachtingen ophalen voor reislocaties en -datums',
+  'oauth.scope.journey:read.label': 'Reisverslagen bekijken',
+  'oauth.scope.journey:read.description': 'Reisverslagen, vermeldingen en lijst van bijdragers lezen',
+  'oauth.scope.journey:write.label': 'Reisverslagen beheren',
+  'oauth.scope.journey:write.description': 'Reisverslagen en hun vermeldingen aanmaken, bijwerken en verwijderen',
+  'oauth.scope.journey:share.label': 'Reisverslag-links beheren',
+  'oauth.scope.journey:share.description': 'Publieke deellinks voor reisverslagen aanmaken, bijwerken en intrekken',
 
   // System notices
   'system_notice.welcome_v1.title': 'Welkom bij TREK',

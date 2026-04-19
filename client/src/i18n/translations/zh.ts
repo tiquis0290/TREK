@@ -2195,6 +2195,7 @@ const zh: Record<string, string> = {
   'oauth.scope.group.vacay': '假期',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': '天气',
+  'oauth.scope.group.journey': '旅程',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': '查看行程和行程计划',
@@ -2245,6 +2246,12 @@ const zh: Record<string, string> = {
   'oauth.scope.geo:read.description': '搜索位置、解析地图 URL 和反向地理编码坐标',
   'oauth.scope.weather:read.label': '天气预报',
   'oauth.scope.weather:read.description': '获取行程地点和日期的天气预报',
+  'oauth.scope.journey:read.label': '查看旅程',
+  'oauth.scope.journey:read.description': '读取旅程、条目和贡献者列表',
+  'oauth.scope.journey:write.label': '管理旅程',
+  'oauth.scope.journey:write.description': '创建、更新和删除旅程及其条目',
+  'oauth.scope.journey:share.label': '管理旅程链接',
+  'oauth.scope.journey:share.description': '创建、更新和撤销旅程的公开分享链接',
 
   // System notices
   'system_notice.welcome_v1.title': '欢迎使用 TREK',

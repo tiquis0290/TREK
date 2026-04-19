@@ -2199,6 +2199,7 @@ const cs: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.group.vacay': 'Dovolená',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': 'Počasí',
+  'oauth.scope.group.journey': 'Cestovní deník',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': 'Zobrazit výlety a itineráře',
@@ -2249,6 +2250,12 @@ const cs: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.geo:read.description': 'Vyhledávat místa, řešit URL map a zpětně geokódovat souřadnice',
   'oauth.scope.weather:read.label': 'Předpovědi počasí',
   'oauth.scope.weather:read.description': 'Získávat předpovědi počasí pro místa a data výletu',
+  'oauth.scope.journey:read.label': 'Zobrazit cestovní deníky',
+  'oauth.scope.journey:read.description': 'Číst cestovní deníky, záznamy a seznam přispěvatelů',
+  'oauth.scope.journey:write.label': 'Spravovat cestovní deníky',
+  'oauth.scope.journey:write.description': 'Vytvářet, aktualizovat a mazat cestovní deníky a jejich záznamy',
+  'oauth.scope.journey:share.label': 'Spravovat odkazy na cestovní deníky',
+  'oauth.scope.journey:share.description': 'Vytvářet, aktualizovat a rušit veřejné sdílené odkazy na cestovní deníky',
 
   // System notices
   'system_notice.welcome_v1.title': 'Vítejte v TREK',

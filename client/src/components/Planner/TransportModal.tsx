@@ -135,7 +135,7 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
         setToPick({ location: locationFromEndpoint(to) || undefined })
       }
     } else {
-      setForm({ ...defaultForm, start_day_id: selectedDayId ?? '' })
+      setForm({ ...defaultForm, start_day_id: selectedDayId ?? '', end_day_id: selectedDayId ?? '' })
       setFromPick({})
       setToPick({})
     }

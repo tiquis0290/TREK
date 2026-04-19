@@ -2235,6 +2235,7 @@ const id: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.group.vacay': 'Liburan',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': 'Cuaca',
+  'oauth.scope.group.journey': 'Journey',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': 'Lihat perjalanan & itinerari',
@@ -2285,6 +2286,12 @@ const id: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.geo:read.description': 'Cari lokasi, selesaikan URL peta, dan geokode terbalik koordinat',
   'oauth.scope.weather:read.label': 'Prakiraan cuaca',
   'oauth.scope.weather:read.description': 'Ambil prakiraan cuaca untuk lokasi dan tanggal perjalanan',
+  'oauth.scope.journey:read.label': 'Lihat Journey',
+  'oauth.scope.journey:read.description': 'Baca Journey, entri, dan daftar kontributor',
+  'oauth.scope.journey:write.label': 'Kelola Journey',
+  'oauth.scope.journey:write.description': 'Buat, perbarui, dan hapus Journey beserta entrinya',
+  'oauth.scope.journey:share.label': 'Kelola tautan Journey',
+  'oauth.scope.journey:share.description': 'Buat, perbarui, dan cabut tautan berbagi publik untuk Journey',
 
 
 

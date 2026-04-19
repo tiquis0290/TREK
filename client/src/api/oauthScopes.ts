@@ -38,6 +38,9 @@ export const SCOPE_GROUPS: Record<string, ScopeKeys> = {
   'vacay:write':         { labelKey: 'oauth.scope.vacay:write.label',         descriptionKey: 'oauth.scope.vacay:write.description',         groupKey: 'oauth.scope.group.vacay' },
   'geo:read':            { labelKey: 'oauth.scope.geo:read.label',            descriptionKey: 'oauth.scope.geo:read.description',            groupKey: 'oauth.scope.group.geo' },
   'weather:read':        { labelKey: 'oauth.scope.weather:read.label',        descriptionKey: 'oauth.scope.weather:read.description',        groupKey: 'oauth.scope.group.weather' },
+  'journey:read':        { labelKey: 'oauth.scope.journey:read.label',        descriptionKey: 'oauth.scope.journey:read.description',        groupKey: 'oauth.scope.group.journey' },
+  'journey:write':       { labelKey: 'oauth.scope.journey:write.label',       descriptionKey: 'oauth.scope.journey:write.description',       groupKey: 'oauth.scope.group.journey' },
+  'journey:share':       { labelKey: 'oauth.scope.journey:share.label',       descriptionKey: 'oauth.scope.journey:share.description',       groupKey: 'oauth.scope.group.journey' },
 }
 
 export const ALL_SCOPES = Object.keys(SCOPE_GROUPS)

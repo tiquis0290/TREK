@@ -15,6 +15,7 @@ import { getNotifications } from '../services/inAppNotifications';
 import { getActivePlanId, getActivePlan, getPlanData, getEntries as getVacayEntries, getHolidays } from '../services/vacayService';
 import { isAddonEnabled } from '../services/adminService';
 import { ADDON_IDS } from '../addons';
+import { canAccessJourney, getJourneyFull, listEntries, listJourneys } from '../services/journeyService';
 import { canRead, canReadTrips } from './scopes';
 
 function parseId(value: string | string[]): number | null {
@@ -378,6 +379,59 @@ export function registerResources(server: McpServer, userId: number, scopes: str
         const yearStr = Array.isArray(year) ? year[0] : year;
         const result = await getHolidays(yearStr, plan.holidays_region);
         return jsonContent(uri.href, result.data ?? []);
+      }
+    );
+  }
+
+  // Journey resources (Journey addon)
+  if (isAddonEnabled(ADDON_IDS.JOURNEY) && canRead(scopes, 'journey')) {
+    server.registerResource(
+      'journeys',
+      'trek://journeys',
+      { description: 'All journeys owned or contributed to by the current user', mimeType: 'application/json' },
+      async (uri) => {
+        const journeys = listJourneys(userId);
+        return jsonContent(uri.href, journeys);
+      }
+    );
+
+    server.registerResource(
+      'journey-detail',
+      new ResourceTemplate('trek://journeys/{journeyId}', { list: undefined }),
+      { description: 'Single journey with entries, contributors, and trip links', mimeType: 'application/json' },
+      async (uri, { journeyId }) => {
+        const id = parseId(journeyId);
+        if (id === null) return accessDenied(uri.href);
+        const journey = getJourneyFull(id, userId);
+        if (!journey) return accessDenied(uri.href);
+        return jsonContent(uri.href, journey);
+      }
+    );
+
+    server.registerResource(
+      'journey-entries',
+      new ResourceTemplate('trek://journeys/{journeyId}/entries', { list: undefined }),
+      { description: 'All entries in a journey (date, text, mood, linked trip)', mimeType: 'application/json' },
+      async (uri, { journeyId }) => {
+        const id = parseId(journeyId);
+        if (id === null) return accessDenied(uri.href);
+        const j = canAccessJourney(id, userId);
+        if (!j) return accessDenied(uri.href);
+        const entries = listEntries(id, userId);
+        return jsonContent(uri.href, entries);
+      }
+    );
+
+    server.registerResource(
+      'journey-contributors',
+      new ResourceTemplate('trek://journeys/{journeyId}/contributors', { list: undefined }),
+      { description: 'Contributors (owners and collaborators) of a journey', mimeType: 'application/json' },
+      async (uri, { journeyId }) => {
+        const id = parseId(journeyId);
+        if (id === null) return accessDenied(uri.href);
+        const j = getJourneyFull(id, userId);
+        if (!j) return accessDenied(uri.href);
+        return jsonContent(uri.href, (j as any).contributors ?? []);
       }
     );
   }

@@ -2205,6 +2205,7 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.group.vacay': 'Urlaub',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': 'Wetter',
+  'oauth.scope.group.journey': 'Journey',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': 'Reisen und Reisepläne anzeigen',
@@ -2255,6 +2256,12 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.geo:read.description': 'Orte suchen, Karten-URLs auflösen und Koordinaten rückwärts geokodieren',
   'oauth.scope.weather:read.label': 'Wettervorhersagen',
   'oauth.scope.weather:read.description': 'Wettervorhersagen für Reiseorte und -daten abrufen',
+  'oauth.scope.journey:read.label': 'Journeys ansehen',
+  'oauth.scope.journey:read.description': 'Journeys, Einträge und Mitarbeiterliste lesen',
+  'oauth.scope.journey:write.label': 'Journeys verwalten',
+  'oauth.scope.journey:write.description': 'Journeys und deren Einträge erstellen, bearbeiten und löschen',
+  'oauth.scope.journey:share.label': 'Journey-Links verwalten',
+  'oauth.scope.journey:share.description': 'Öffentliche Freigabelinks für Journeys erstellen, aktualisieren und widerrufen',
 
   // System notices
   'system_notice.welcome_v1.title': 'Willkommen bei TREK',

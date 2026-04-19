@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { z } from 'zod';
+import { findByIata, searchAirports } from '../../services/airportService';
 import { searchPlaces, getPlaceDetails, reverseGeocode, resolveGoogleMapsUrl } from '../../services/mapsService';
 import { getWeather, getDetailedWeather } from '../../services/weatherService';
 import {
@@ -108,6 +109,40 @@ export function registerMapsWeatherTools(server: McpServer, userId: number, scop
       } catch (err: any) {
         return { content: [{ type: 'text' as const, text: err?.message ?? 'Weather service not available.' }], isError: true };
       }
+    }
+  );
+
+  // --- AIRPORTS ---
+
+  if (canGeo) server.registerTool(
+    'search_airports',
+    {
+      description: 'Search for airports by name, city, or IATA code. Returns matching airports with IATA code, name, city, country, coordinates, and timezone. Use before create_transport (flight) to get the correct IATA code and timezone for endpoints.',
+      inputSchema: {
+        query: z.string().min(1).max(200).describe('Airport name, city, or IATA code (e.g. "zurich", "ZRH", "charles de gaulle")'),
+        limit: z.number().int().min(1).max(50).optional().default(10),
+      },
+      annotations: TOOL_ANNOTATIONS_READONLY,
+    },
+    async ({ query, limit }) => {
+      const airports = searchAirports(query, limit ?? 10);
+      return ok({ airports });
+    }
+  );
+
+  if (canGeo) server.registerTool(
+    'get_airport',
+    {
+      description: 'Get a single airport by its IATA code. Returns name, city, country, coordinates, and timezone.',
+      inputSchema: {
+        iata: z.string().length(3).toUpperCase().describe('IATA airport code (e.g. "ZRH", "AMS", "CDG")'),
+      },
+      annotations: TOOL_ANNOTATIONS_READONLY,
+    },
+    async ({ iata }) => {
+      const airport = findByIata(iata);
+      if (!airport) return { content: [{ type: 'text' as const, text: 'Airport not found.' }], isError: true };
+      return ok({ airport });
     }
   );
 }

@@ -2,7 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { z } from 'zod';
 import { canAccessTrip } from '../../db/database';
 import { isDemoUser } from '../../services/authService';
-import { listPlaces, createPlace, updatePlace, deletePlace } from '../../services/placeService';
+import { deletePlacesMany, importGoogleList, importNaverList, listPlaces, createPlace, updatePlace, deletePlace } from '../../services/placeService';
+import { onPlaceDeleted } from '../../services/journeyService';
 import { listCategories } from '../../services/categoryService';
 import { searchPlaces } from '../../services/mapsService';
 import {
@@ -157,6 +158,59 @@ export function registerPlaceTools(server: McpServer, userId: number, scopes: st
       } catch {
         return { content: [{ type: 'text' as const, text: 'Place search failed.' }], isError: true };
       }
+    }
+  );
+
+  if (W) server.registerTool(
+    'import_places_from_url',
+    {
+      description: 'Import places from a shared Google Maps or Naver Maps list URL. Returns the imported places and count. The list must be shared publicly.',
+      inputSchema: {
+        tripId: z.number().int().positive(),
+        url: z.string().url().describe('Publicly shared Google Maps list URL (maps.app.goo.gl/...) or Naver Maps list URL'),
+        source: z.enum(['google-list', 'naver-list']).describe('List source: "google-list" for Google Maps saved places, "naver-list" for Naver Maps'),
+      },
+      annotations: TOOL_ANNOTATIONS_NON_IDEMPOTENT,
+    },
+    async ({ tripId, url, source }) => {
+      if (isDemoUser(userId)) return demoDenied();
+      if (!canAccessTrip(tripId, userId)) return noAccess();
+
+      const result = source === 'google-list'
+        ? await importGoogleList(String(tripId), url)
+        : await importNaverList(String(tripId), url);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: result.error }], isError: true };
+      }
+
+      for (const place of result.places) {
+        safeBroadcast(tripId, 'place:created', { place });
+      }
+      return ok({ places: result.places, count: result.places.length, listName: result.listName, skipped: result.skipped });
+    }
+  );
+
+  if (W) server.registerTool(
+    'bulk_delete_places',
+    {
+      description: 'Delete multiple places from a trip at once. Removes all day assignments for each place as well. Warn the user before calling this — it cannot be undone.',
+      inputSchema: {
+        tripId: z.number().int().positive(),
+        placeIds: z.array(z.number().int().positive()).min(1).max(200),
+      },
+      annotations: TOOL_ANNOTATIONS_DELETE,
+    },
+    async ({ tripId, placeIds }) => {
+      if (isDemoUser(userId)) return demoDenied();
+      if (!canAccessTrip(tripId, userId)) return noAccess();
+
+      const deleted = deletePlacesMany(String(tripId), placeIds);
+      for (const id of deleted) {
+        safeBroadcast(tripId, 'place:deleted', { placeId: id });
+        try { onPlaceDeleted(id); } catch {}
+      }
+      return ok({ deleted, count: deleted.length });
     }
   );
 }

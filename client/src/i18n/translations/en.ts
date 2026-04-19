@@ -2242,6 +2242,7 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.group.vacay': 'Vacation',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': 'Weather',
+  'oauth.scope.group.journey': 'Journey',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': 'View trips & itineraries',
@@ -2292,6 +2293,12 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.geo:read.description': 'Search locations, resolve map URLs, and reverse geocode coordinates',
   'oauth.scope.weather:read.label': 'Weather forecasts',
   'oauth.scope.weather:read.description': 'Fetch weather forecasts for trip locations and dates',
+  'oauth.scope.journey:read.label': 'View journeys',
+  'oauth.scope.journey:read.description': 'Read journeys, entries, and contributor list',
+  'oauth.scope.journey:write.label': 'Manage journeys',
+  'oauth.scope.journey:write.description': 'Create, update, and delete journeys and their entries',
+  'oauth.scope.journey:share.label': 'Manage journey links',
+  'oauth.scope.journey:share.description': 'Create, update, and revoke public share links for journeys',
 
   // System notices — 3.0.0 upgrade
   'system_notice.v3_photos.title': 'Photos have moved in 3.0',

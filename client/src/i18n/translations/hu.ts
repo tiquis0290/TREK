@@ -2196,6 +2196,7 @@ const hu: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.group.vacay': 'Szabadság',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': 'Időjárás',
+  'oauth.scope.group.journey': 'Útinaplók',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': 'Utazások és útvonalak megtekintése',
@@ -2246,6 +2247,12 @@ const hu: Record<string, string | { name: string; category: string }[]> = {
   'oauth.scope.geo:read.description': 'Helyek keresése, térkép URL-ek feloldása és koordináták fordított geokódolása',
   'oauth.scope.weather:read.label': 'Időjárás-előrejelzések',
   'oauth.scope.weather:read.description': 'Időjárás-előrejelzések lekérése az utazási helyszínekre és dátumokra',
+  'oauth.scope.journey:read.label': 'Útinaplók megtekintése',
+  'oauth.scope.journey:read.description': 'Útinaplók, bejegyzések és közreműködők listájának olvasása',
+  'oauth.scope.journey:write.label': 'Útinaplók kezelése',
+  'oauth.scope.journey:write.description': 'Útinaplók és bejegyzéseik létrehozása, frissítése és törlése',
+  'oauth.scope.journey:share.label': 'Útinapló-linkek kezelése',
+  'oauth.scope.journey:share.description': 'Nyilvános megosztási linkek létrehozása, frissítése és visszavonása útinaplókhoz',
 
   // System notices
   'system_notice.welcome_v1.title': 'Üdvözöl a TREK',

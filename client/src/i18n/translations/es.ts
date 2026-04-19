@@ -2201,6 +2201,7 @@ const es: Record<string, string> = {
   'oauth.scope.group.vacay': 'Vacaciones',
   'oauth.scope.group.geo': 'Geo',
   'oauth.scope.group.weather': 'Clima',
+  'oauth.scope.group.journey': 'Travesía',
 
   // OAuth scope labels & descriptions
   'oauth.scope.trips:read.label': 'Ver viajes e itinerarios',
@@ -2251,6 +2252,12 @@ const es: Record<string, string> = {
   'oauth.scope.geo:read.description': 'Buscar lugares, resolver URLs de mapa y geocodificar coordenadas',
   'oauth.scope.weather:read.label': 'Previsiones meteorológicas',
   'oauth.scope.weather:read.description': 'Obtener previsiones meteorológicas para lugares y fechas del viaje',
+  'oauth.scope.journey:read.label': 'Ver travesías',
+  'oauth.scope.journey:read.description': 'Leer travesías, entradas y lista de colaboradores',
+  'oauth.scope.journey:write.label': 'Gestionar travesías',
+  'oauth.scope.journey:write.description': 'Crear, actualizar y eliminar travesías y sus entradas',
+  'oauth.scope.journey:share.label': 'Gestionar enlaces de travesías',
+  'oauth.scope.journey:share.description': 'Crear, actualizar y revocar enlaces públicos de compartir para travesías',
 
   // System notices
   'system_notice.welcome_v1.title': 'Bienvenido a TREK',

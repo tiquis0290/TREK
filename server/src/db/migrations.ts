@@ -1837,6 +1837,36 @@ function runMigrations(db: Database.Database): void {
         }
       } catch { /* notifications table may not exist on very old installs */ }
     },
+    // Migration: widen idempotency_keys primary key to (key, user_id,
+    // method, path). The middleware lookup was widened in the same audit
+    // batch so a reused X-Idempotency-Key against a different endpoint
+    // does not replay the cached body of an unrelated request. The old
+    // PK was only (key, user_id), so the `INSERT OR IGNORE` on the
+    // second endpoint silently skipped — the cache never stored request
+    // B's response and replays re-executed the handler. Rebuild the
+    // table with the widened PK, preserving existing rows (the old PK
+    // guarantees no conflicts in the new, strictly looser unique key).
+    () => {
+      const hasTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'idempotency_keys'").get();
+      if (!hasTable) return;
+      db.exec(`
+        CREATE TABLE idempotency_keys_new (
+          key         TEXT NOT NULL,
+          user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          method      TEXT NOT NULL,
+          path        TEXT NOT NULL,
+          status_code INTEGER NOT NULL,
+          response_body TEXT NOT NULL,
+          created_at  INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+          PRIMARY KEY (key, user_id, method, path)
+        );
+        INSERT INTO idempotency_keys_new (key, user_id, method, path, status_code, response_body, created_at)
+          SELECT key, user_id, method, path, status_code, response_body, created_at FROM idempotency_keys;
+        DROP TABLE idempotency_keys;
+        ALTER TABLE idempotency_keys_new RENAME TO idempotency_keys;
+        CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created ON idempotency_keys(created_at);
+      `);
+    },
   ];
 
   if (currentVersion < migrations.length) {

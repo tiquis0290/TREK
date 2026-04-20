@@ -79,10 +79,14 @@ export function createApp(): express.Application {
   // Caddy / Cloudflare Tunnel typically leave FORCE_HTTPS unset (the
   // proxy handles the redirect for them), and the previous "HSTS off by
   // default" meant those instances never advertised HSTS at all.
-  // `HSTS_INCLUDE_SUBDOMAINS=false` lets operators with sibling
-  // subdomains on the same apex opt back out.
+  //
+  // `includeSubDomains` stays OFF by default on purpose: an instance
+  // running on an apex domain would otherwise force HTTPS on every
+  // sibling subdomain the same operator may still be running over plain
+  // HTTP. Operators who want the stricter policy opt in with
+  // `HSTS_INCLUDE_SUBDOMAINS=true`.
   const hstsActive = shouldForceHttps || process.env.NODE_ENV === 'production';
-  const hstsIncludeSubdomains = process.env.HSTS_INCLUDE_SUBDOMAINS !== 'false';
+  const hstsIncludeSubdomains = process.env.HSTS_INCLUDE_SUBDOMAINS === 'true';
 
   // RFC 8414 / RFC 9728: discovery docs are world-readable — open CORS regardless of deployment config
   app.use(

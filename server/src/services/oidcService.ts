@@ -284,7 +284,13 @@ export async function verifyIdToken(
   try { keys = await fetchJwks(doc.jwks_uri); }
   catch (e) { return { ok: false, error: 'jwks_fetch_failed' }; }
 
-  const jwk = keys.find(k => !header.kid || k['kid'] === header.kid) ?? keys[0];
+  // When the token carries a `kid`, refuse to fall back to any other
+  // key in the JWKS — a mismatch means the token was signed with a key
+  // the provider no longer publishes, and we should reject rather than
+  // mask the failure by trying another key.
+  const jwk = header.kid
+    ? keys.find((k) => k['kid'] === header.kid)
+    : keys[0];
   if (!jwk) return { ok: false, error: 'no_matching_key' };
 
   let publicKey;

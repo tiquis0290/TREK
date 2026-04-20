@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 import { db } from '../db/database';
-import { JWT_SECRET } from '../config';
-import { extractToken } from './auth';
+import { extractToken, verifyJwtAndLoadUser } from './auth';
 import { DEMO_EMAILS } from '../services/demo';
 
 /** Paths that never require MFA (public or pre-auth). */
@@ -54,14 +52,15 @@ export function enforceGlobalMfaPolicy(req: Request, res: Response, next: NextFu
     return;
   }
 
-  let userId: number;
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { id: number };
-    userId = decoded.id;
-  } catch {
+  // Use the shared verify helper so the `password_version` gate applies
+  // here too — a JWT stolen before a password reset would otherwise
+  // continue to satisfy this middleware until its natural 24h expiry.
+  const verified = verifyJwtAndLoadUser(token);
+  if (!verified) {
     next();
     return;
   }
+  const userId = verified.id;
 
   const requireRow = db.prepare("SELECT value FROM app_settings WHERE key = 'require_mfa'").get() as { value: string } | undefined;
   if (requireRow?.value !== 'true') {
@@ -69,16 +68,13 @@ export function enforceGlobalMfaPolicy(req: Request, res: Response, next: NextFu
     return;
   }
 
-  if (process.env.DEMO_MODE === 'true') {
-    const demo = db.prepare('SELECT email FROM users WHERE id = ?').get(userId) as { email: string } | undefined;
-    if (demo?.email && DEMO_EMAILS.has(demo.email)) {
-      next();
-      return;
-    }
+  if (process.env.DEMO_MODE === 'true' && verified.email && DEMO_EMAILS.has(verified.email)) {
+    next();
+    return;
   }
 
-  const row = db.prepare('SELECT mfa_enabled, role FROM users WHERE id = ?').get(userId) as
-    | { mfa_enabled: number | boolean; role: string }
+  const row = db.prepare('SELECT mfa_enabled FROM users WHERE id = ?').get(userId) as
+    | { mfa_enabled: number | boolean }
     | undefined;
   if (!row) {
     next();

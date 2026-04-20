@@ -205,20 +205,40 @@ export function restoreFile(id: string | number) {
 
 export async function permanentDeleteFile(file: TripFile): Promise<void> {
   const { resolved } = resolveFilePath(file.filename);
-  // `force: true` swallows ENOENT, removing the prior existsSync+unlink
-  // double-call that blocked the event loop twice per deletion.
-  await fs.promises.rm(resolved, { force: true }).catch((e) => console.error('Error deleting file:', e));
+  // `force: true` swallows ENOENT, replacing the prior existsSync+unlink
+  // double-call that blocked the event loop twice per deletion. Only
+  // drop the DB row when the on-disk unlink either succeeded or the
+  // file was already gone — otherwise a permission / ENOSPC failure
+  // would orphan the bytes on disk with no DB pointer left to clean it.
+  try {
+    await fs.promises.rm(resolved, { force: true });
+  } catch (e) {
+    console.error(`[files] unlink failed for ${file.filename}, keeping DB row:`, e);
+    throw e;
+  }
   db.prepare('DELETE FROM trip_files WHERE id = ?').run(file.id);
 }
 
 export async function emptyTrash(tripId: string | number): Promise<number> {
   const trashed = db.prepare('SELECT * FROM trip_files WHERE trip_id = ? AND deleted_at IS NOT NULL').all(tripId) as TripFile[];
+  // Collect successful IDs separately so we only DELETE rows whose disk
+  // content was actually removed — failing unlinks keep their DB row
+  // and a retry via the single-file delete path can try again.
+  const successfullyUnlinked: number[] = [];
   await Promise.all(trashed.map(async (file) => {
     const { resolved } = resolveFilePath(file.filename);
-    await fs.promises.rm(resolved, { force: true }).catch((e) => console.error('Error deleting file:', e));
+    try {
+      await fs.promises.rm(resolved, { force: true });
+      successfullyUnlinked.push(Number(file.id));
+    } catch (e) {
+      console.error(`[files] unlink failed for ${file.filename}, keeping DB row:`, e);
+    }
   }));
-  db.prepare('DELETE FROM trip_files WHERE trip_id = ? AND deleted_at IS NOT NULL').run(tripId);
-  return trashed.length;
+  if (successfullyUnlinked.length > 0) {
+    const placeholders = successfullyUnlinked.map(() => '?').join(',');
+    db.prepare(`DELETE FROM trip_files WHERE id IN (${placeholders})`).run(...successfullyUnlinked);
+  }
+  return successfullyUnlinked.length;
 }
 
 // ---------------------------------------------------------------------------

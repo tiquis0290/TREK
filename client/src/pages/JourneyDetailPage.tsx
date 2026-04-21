@@ -2981,7 +2981,7 @@ function JourneyShareSection({ journeyId }: { journeyId: number }) {
             onClick={deleteLink}
             className="text-[11px] font-medium text-red-500 hover:text-red-600 self-start"
           >
-            Remove share link
+            {t('share.deleteLink')}
           </button>
         </div>
       )}

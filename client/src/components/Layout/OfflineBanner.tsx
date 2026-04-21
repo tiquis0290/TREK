@@ -1,11 +1,15 @@
 /**
- * OfflineBanner — persistent top bar indicating connectivity + sync state.
+ * OfflineBanner — connectivity + sync state indicator.
  *
  * States:
- *   offline + N queued  →  amber bar "Offline — N changes queued"
- *   offline + 0 queued  →  amber bar "Offline"
- *   online  + N pending →  blue bar  "Syncing N changes…"
+ *   offline + N queued  →  amber pill "Offline · N queued"
+ *   offline + 0 queued  →  amber pill "Offline"
+ *   online  + N pending →  blue pill  "Syncing N…"
  *   online  + 0 pending →  hidden
+ *
+ * Rendered as a small floating pill anchored to the bottom-center of the
+ * viewport so it never competes with top navigation or sticky modal
+ * headers. On mobile it hovers just above the bottom tab bar.
  */
 import React, { useState, useEffect } from 'react'
 import { WifiOff, RefreshCw } from 'lucide-react'
@@ -40,22 +44,6 @@ export default function OfflineBanner(): React.ReactElement | null {
   }, [])
 
   const hidden = isOnline && pendingCount === 0
-
-  // When the banner is visible, reserve space at the top of the page so it
-  // doesn't cover the nav/header. Uses a CSS var on <html> so we can offset
-  // via a global `body` rule instead of rewiring every layout.
-  useEffect(() => {
-    const root = document.documentElement
-    if (hidden) {
-      root.style.removeProperty('--offline-banner-h')
-    } else {
-      // 32px for icon+text row + the top safe-area inset that the banner adds
-      // in its own padding. Kept in one place so it's easy to tweak.
-      root.style.setProperty('--offline-banner-h', 'calc(env(safe-area-inset-top, 0px) + 32px)')
-    }
-    return () => { root.style.removeProperty('--offline-banner-h') }
-  }, [hidden])
-
   if (hidden) return null
 
   const offline = !isOnline
@@ -64,9 +52,9 @@ export default function OfflineBanner(): React.ReactElement | null {
 
   const label = offline
     ? pendingCount > 0
-      ? `Offline — ${pendingCount} change${pendingCount !== 1 ? 's' : ''} queued`
+      ? `Offline · ${pendingCount} queued`
       : 'Offline'
-    : `Syncing ${pendingCount} change${pendingCount !== 1 ? 's' : ''}…`
+    : `Syncing ${pendingCount}…`
 
   return (
     <div
@@ -74,27 +62,29 @@ export default function OfflineBanner(): React.ReactElement | null {
       aria-live="polite"
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
+        // Hover above the mobile bottom nav; on desktop --bottom-nav-h is 0,
+        // so the pill sits 16px from the bottom.
+        bottom: 'calc(var(--bottom-nav-h) + 16px)',
+        left: '50%',
+        transform: 'translateX(-50%)',
         zIndex: 9999,
         background: bg,
         color: text,
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 6px)',
-        paddingBottom: '6px',
-        paddingLeft: '16px',
-        paddingRight: '16px',
-        fontSize: 13,
-        fontWeight: 500,
+        gap: 6,
+        padding: '6px 14px',
+        borderRadius: 999,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.08)',
+        fontSize: 12,
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
       }}
     >
       {offline
-        ? <WifiOff size={14} />
-        : <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+        ? <WifiOff size={12} />
+        : <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
       }
       {label}
     </div>

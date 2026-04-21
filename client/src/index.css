@@ -431,8 +431,6 @@ input[type="number"], input[type="time"], input[type="date"], input[type="dateti
   --safe-top: env(safe-area-inset-top, 0px);
   --nav-h: 0px;
   --bottom-nav-h: 0px;
-  /* Set by OfflineBanner when it's visible so body can reserve space. */
-  --offline-banner-h: 0px;
   --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   --sp-1: 4px;
   --sp-2: 8px;
@@ -538,9 +536,7 @@ body {
   font-family: var(--font-system);
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  transition: background-color 0.2s, color 0.2s, padding-top 0.15s ease;
-  /* Reserve space when OfflineBanner is visible; 0 when online. */
-  padding-top: var(--offline-banner-h, 0px);
+  transition: background-color 0.2s, color 0.2s;
 }
 
 /* ── Marker cluster custom styling ────────────── */

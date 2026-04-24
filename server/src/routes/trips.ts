@@ -382,8 +382,12 @@ router.get('/:id/subscribe.ics', authenticate, (req: Request, res: Response) => 
 
 router.post('/:id/subscribe.ics', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  if (!canAccessTrip(req.params.id, authReq.user.id)) {
+  const access = canAccessTrip(req.params.id, authReq.user.id);
+  if (!access) {
     return res.status(404).json({ error: 'Trip not found' });
+  }
+  if (!checkPermission('share_manage', authReq.user.role, access.user_id, authReq.user.id, access.user_id !== authReq.user.id)) {
+    return res.status(403).json({ error: 'No permission' });
   }
 
   const result = createOrUpdateCalendarShareLink(req.params.id, authReq.user.id);
@@ -404,6 +408,9 @@ router.delete('/:id/subscribe.ics', authenticate, (req: Request, res: Response) 
   const authReq = req as AuthRequest;
   const access = canAccessTrip(req.params.id, authReq.user.id);
   if (!access) return res.status(404).json({ error: 'Trip not found' });
+  if (!checkPermission('share_manage', authReq.user.role, access.user_id, authReq.user.id, access.user_id !== authReq.user.id)) {
+    return res.status(403).json({ error: 'No permission' });
+  }
 
   deleteCalendarShareLink(req.params.id);
   res.json({ success: true });

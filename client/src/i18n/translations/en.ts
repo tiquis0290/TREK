@@ -308,6 +308,7 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'dayplan.calendarShareTitle': 'Calendar share',
   'dayplan.calendarShareDescription': 'Create a subscription link for calendar apps, or download the ICS file.',
   'dayplan.calendarCreateLink': 'Create link',
+  'dayplan.calendarCreateLinkNoPermission': 'You do not have permission to create calendar links for this trip.',
   'dayplan.calendarDeleteLink': 'Delete link',
   'dayplan.calendarDownloadFile': 'Download ICS file',
   'dayplan.calendarLinkFailed': 'Calendar link failed',

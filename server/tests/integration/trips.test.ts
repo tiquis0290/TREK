@@ -921,6 +921,38 @@ describe('ICS export', () => {
 
     expect(res.status).toBe(404);
   });
+
+  it('TRIP-025 — member without share_manage cannot create subscribe link → 403', async () => {
+    const { user: owner } = createUser(testDb);
+    const { user: member } = createUser(testDb);
+    const trip = createTrip(testDb, owner.id, { title: 'Shared Trip' });
+    addTripMember(testDb, trip.id, member.id);
+
+    const res = await request(app)
+      .post(`/api/trips/${trip.id}/subscribe.ics`)
+      .set('Host', 'trek.example.com')
+      .set('Cookie', authCookie(member.id));
+
+    expect(res.status).toBe(403);
+  });
+
+  it('TRIP-025 — member without share_manage cannot delete subscribe link → 403', async () => {
+    const { user: owner } = createUser(testDb);
+    const { user: member } = createUser(testDb);
+    const trip = createTrip(testDb, owner.id, { title: 'Shared Trip' });
+    addTripMember(testDb, trip.id, member.id);
+
+    await request(app)
+      .post(`/api/trips/${trip.id}/subscribe.ics`)
+      .set('Host', 'trek.example.com')
+      .set('Cookie', authCookie(owner.id));
+
+    const res = await request(app)
+      .delete(`/api/trips/${trip.id}/subscribe.ics`)
+      .set('Cookie', authCookie(member.id));
+
+    expect(res.status).toBe(403);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

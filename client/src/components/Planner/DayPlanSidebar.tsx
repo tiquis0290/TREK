@@ -225,6 +225,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
   const tripActions = useRef(useTripStore.getState()).current
   const can = useCanDo()
   const canEditDays = can('day_edit', trip)
+  const canManageShare = can('share_manage', trip)
 
   const { noteUi, setNoteUi, noteInputRef, dayNotes, openAddNote: _openAddNote, openEditNote: _openEditNote, cancelNote, saveNote, deleteNote: _deleteNote, moveNote: _moveNote } = useDayNotes(tripId)
 
@@ -2270,23 +2271,27 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                     {icsCopied ? <><Check size={10} /> {t('common.copied')}</> : <><Copy size={10} /> {t('common.copy')}</>}
                   </button>
                 </div>
-                <button onClick={handleIcsDeleteLink} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  padding: '6px 0', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)',
-                  background: 'rgba(239,68,68,0.06)', color: '#ef4444', fontSize: 11, fontWeight: 500,
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}>
-                  <Trash2 size={11} /> {t('dayplan.calendarDeleteLink')}
-                </button>
+                {canManageShare && (
+                  <button onClick={handleIcsDeleteLink} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    padding: '6px 0', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)',
+                    background: 'rgba(239,68,68,0.06)', color: '#ef4444', fontSize: 11, fontWeight: 500,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}>
+                    <Trash2 size={11} /> {t('dayplan.calendarDeleteLink')}
+                  </button>
+                )}
               </div>
             ) : (
-              <button onClick={handleIcsCreateLink} style={{
+              <button onClick={handleIcsCreateLink}
+                disabled={!canManageShare}
+                style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 width: '100%', padding: '8px 0', borderRadius: 8, border: '1px dashed var(--border-primary)',
                 background: 'none', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500,
                 cursor: 'pointer', fontFamily: 'inherit',
               }}>
-                <Link2 size={12} /> {t('dayplan.calendarCreateLink')}
+                {canManageShare ? <><Link2 size={12} /> {t('dayplan.calendarCreateLink')}</> : <>{t('dayplan.calendarCreateLinkNoPermission')}</>}
               </button>
             )}
             <button

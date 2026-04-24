@@ -24,6 +24,10 @@ const mockDayNotesState = vi.hoisted(() => ({
   moveNote: vi.fn(),
 }))
 
+const mockPermissionsState = vi.hoisted(() => ({
+  canDo: true,
+}))
+
 // ── Module mocks ────────────────────────────────────────────────────────────
 
 vi.mock('../../api/client', async (importOriginal) => {
@@ -79,7 +83,7 @@ vi.mock('../../store/permissionsStore', async (importOriginal) => {
   const actual = await importOriginal() as any
   return {
     ...actual,
-    useCanDo: () => () => true,
+    useCanDo: () => () => mockPermissionsState.canDo,
   }
 })
 
@@ -125,6 +129,7 @@ beforeEach(() => {
   // Reset mutable day-notes state
   mockDayNotesState.noteUi = {}
   mockDayNotesState.dayNotes = {}
+  mockPermissionsState.canDo = true
   seedStore(useAuthStore, { user: buildUser(), isAuthenticated: true })
   seedStore(useTripStore, { trip: buildTrip({ id: 1 }) })
   seedStore(useSettingsStore, { settings: { time_format: '24h', temperature_unit: 'celsius' } } as any)
@@ -1005,6 +1010,25 @@ describe('DayPlanSidebar', () => {
     clipboardSpy.mockRestore()
     createObjURL.mockRestore()
     revokeObjURL.mockRestore()
+  })
+
+  it('FE-PLANNER-DAYPLAN-099: ICS dialog hides delete link button without share_manage permission', async () => {
+    const user = userEvent.setup()
+    mockPermissionsState.canDo = false
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ token: 'existing-token' }),
+    } as any)
+
+    render(<DayPlanSidebar {...makeDefaultProps()} />)
+    await user.click(screen.getByText('ICS').closest('button')!)
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('/api/trips/1/subscribe.ics', expect.any(Object)))
+    expect(await screen.findByDisplayValue(`${window.location.origin}/api/shared/existing-token/calendar.ics`)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete link' })).not.toBeInTheDocument()
+
+    fetchSpy.mockRestore()
   })
 
   // ── openAddNote button click ──────────────────────────────────────────

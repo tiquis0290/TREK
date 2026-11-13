@@ -1,6 +1,6 @@
 # TREK built from this branch, for the demo instance on Coolify.
-# Secrets (ENCRYPTION_KEY, ADMIN_PASSWORD) and APP_URL come from Coolify's
-# environment variables, never from git.
+# ADMIN_PASSWORD and APP_URL come from Coolify's environment variables, never
+# from git. ENCRYPTION_KEY stays unset, as on the production instance.
 services:
   app:
     build:
@@ -22,7 +22,8 @@ services:
       - PORT=3000
       - 'APP_URL=${APP_URL:?}'
       - 'ALLOWED_ORIGINS=${APP_URL:?}'
-      - 'ENCRYPTION_KEY=${ENCRYPTION_KEY:?}'
+      # Unset: TREK reads data/.encryption_key, which a restored backup brings along.
+      - 'ENCRYPTION_KEY=${ENCRYPTION_KEY:-}'
       - 'TZ=${TZ:-Europe/Prague}'
       - 'LOG_LEVEL=${LOG_LEVEL:-info}'
       - 'ADMIN_EMAIL=${ADMIN_EMAIL:-admin@trek.local}'

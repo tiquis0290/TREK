@@ -1,0 +1,45 @@
+# TREK built from this branch, for the demo instance on Coolify.
+# Secrets (ENCRYPTION_KEY, ADMIN_PASSWORD) and APP_URL come from Coolify's
+# environment variables, never from git.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    read_only: true
+    security_opt:
+      - 'no-new-privileges:true'
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    tmpfs:
+      - '/tmp:noexec,nosuid,size=128m'
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - 'APP_URL=${APP_URL:?}'
+      - 'ALLOWED_ORIGINS=${APP_URL:?}'
+      - 'ENCRYPTION_KEY=${ENCRYPTION_KEY:?}'
+      - 'TZ=${TZ:-Europe/Prague}'
+      - 'LOG_LEVEL=${LOG_LEVEL:-info}'
+      - 'ADMIN_EMAIL=${ADMIN_EMAIL:-admin@trek.local}'
+      - 'ADMIN_PASSWORD=${ADMIN_PASSWORD:?}'
+    volumes:
+      - 'trek-demo-data:/app/data'
+      - 'trek-demo-uploads:/app/uploads'
+    expose:
+      - '3000'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  trek-demo-data:
+  trek-demo-uploads:

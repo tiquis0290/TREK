@@ -270,8 +270,9 @@ describe('PublicApiService', () => {
         agency: 'DPMB',
         duration_s: 420,
         stops: 3,
-        from: { name: 'Mendlovo', time: '08:02', track: null },
-        to: { name: 'Hlavni nadrazi', time: '08:09', track: 'B' },
+        // No place stored and a line that decodes to nothing: the booking's start, and no destination to fall back to.
+        from: { name: 'Mendlovo', time: '08:02', track: null, lat: 49.2, lng: 16.6 },
+        to: { name: 'Hlavni nadrazi', time: '08:09', track: 'B', lat: null, lng: null },
       },
     ]);
     const [flight] = trip?.unscheduled_reservations ?? [];

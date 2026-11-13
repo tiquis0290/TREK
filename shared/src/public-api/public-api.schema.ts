@@ -88,11 +88,18 @@ export const publicApiReservationEndpointSchema = z.object({
 });
 export type PublicApiReservationEndpoint = z.infer<typeof publicApiReservationEndpointSchema>;
 
-/** Where a transit leg starts or ends: the stop, the local `HH:MM` and the track or platform. */
+/**
+ * Where a transit leg starts or ends: the stop, the local `HH:MM`, the track or
+ * platform, and where the stop is. Every change has two of these, getting off one
+ * ride and boarding the next, so a reader can guide the traveller between them.
+ * `lat`/`lng` are null when TREK cannot place the stop.
+ */
 export const publicApiTransitLegStopSchema = z.object({
   name: z.string().nullable(),
   time: z.string().nullable(),
   track: z.string().nullable(),
+  lat: z.number().min(-90).max(90).nullable(),
+  lng: z.number().min(-180).max(180).nullable(),
 });
 export type PublicApiTransitLegStop = z.infer<typeof publicApiTransitLegStopSchema>;
 

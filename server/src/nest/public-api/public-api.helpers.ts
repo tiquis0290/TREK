@@ -2,6 +2,7 @@ import { RESERVATION_METADATA } from '../../db/json-columns';
 import type { PublicApiTourColumns } from '../../db/repositories/place-public-api-rows';
 import type { PublicApiEndpointRow } from '../../db/repositories/reservation-public-api-rows';
 import { decodeJson } from '../../utils/json-column';
+import { decodePolyline } from '../../utils/polyline';
 import type {
   PublicApiPlace,
   PublicApiReservationEndpoint,
@@ -72,9 +73,18 @@ export function endpointsByReservation(
 
 const text = z.string().nullable().optional().catch(null);
 const count = z.number().nullable().optional().catch(null);
+const latitude = z.number().min(-90).max(90).nullable().optional().catch(null);
+const longitude = z.number().min(-180).max(180).nullable().optional().catch(null);
 
-/** One end of a leg as `buildTransitReservationParts` stores it. */
-const storedLegStopSchema = z.object({ name: text, time: text, track: text }).nullable().optional().catch(null);
+/**
+ * One end of a leg as `buildTransitReservationParts` stores it. Journeys saved
+ * before the stop's place was stored with it have no `lat`/`lng`.
+ */
+const storedLegStopSchema = z
+  .object({ name: text, time: text, track: text, lat: latitude, lng: longitude })
+  .nullable()
+  .optional()
+  .catch(null);
 
 /**
  * A leg as `buildTransitReservationParts` (`transit-itinerary.helpers.ts`)
@@ -91,41 +101,109 @@ const storedLegSchema = z.object({
   stops: count,
   from: storedLegStopSchema,
   to: storedLegStopSchema,
+  geometry: text,
+  geometry_precision: count,
 });
+
+type StoredLeg = z.infer<typeof storedLegSchema>;
 
 /** `metadata.transit`: only the list of legs is read here, each leg on its own. */
 const storedTransitSchema = z.object({ legs: z.array(z.unknown()) });
 
-function legStop(stop: z.infer<typeof storedLegStopSchema>): PublicApiTransitLegStop {
-  return { name: stop?.name ?? null, time: stop?.time ?? null, track: stop?.track ?? null };
+/** A place on the map, checked to be one. */
+interface Point {
+  lat: number;
+  lng: number;
+}
+
+/** The precision the transit backends encode a leg's line with when the leg does not say. */
+const DEFAULT_GEOMETRY_PRECISION = 5;
+
+function pointOf(lat: unknown, lng: unknown): Point | null {
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
 }
 
 /**
- * The legs of a public transport journey, read from the booking's metadata.
+ * The first and last point of a leg's drawn line, decoded with the precision it
+ * was encoded with. A line that does not decode to valid points gives neither.
+ */
+function geometryEnds(leg: StoredLeg): { first: Point | null; last: Point | null } {
+  if (!leg.geometry) return { first: null, last: null };
+  const precision = leg.geometry_precision;
+  const valid = typeof precision === 'number' && Number.isInteger(precision) && precision >= 1 && precision <= 10;
+  const points = decodePolyline(leg.geometry, valid ? precision : DEFAULT_GEOMETRY_PRECISION);
+  const first = points[0];
+  const last = points[points.length - 1];
+  return { first: first ? pointOf(first[0], first[1]) : null, last: last ? pointOf(last[0], last[1]) : null };
+}
+
+/**
+ * Where each end of each leg is. Its stored place when the journey has one, else
+ * the matching end of the leg's drawn line. A leg with neither (a walk is often
+ * stored without a line) borrows from its neighbours: it starts where the
+ * previous leg ends and ends where the next one starts, and the first and last
+ * leg fall back to the booking's own start and destination.
+ */
+function legEnds(legs: readonly StoredLeg[], endpoints: readonly PublicApiReservationEndpoint[]) {
+  const own = legs.map((leg) => {
+    const line = geometryEnds(leg);
+    return {
+      from: pointOf(leg.from?.lat, leg.from?.lng) ?? line.first,
+      to: pointOf(leg.to?.lat, leg.to?.lng) ?? line.last,
+    };
+  });
+  const start = endpoints.find((point) => point.role === 'from');
+  const destination = endpoints.find((point) => point.role === 'to');
+  const bookingStart = start ? pointOf(start.lat, start.lng) : null;
+  const bookingEnd = destination ? pointOf(destination.lat, destination.lng) : null;
+  return own.map((ends, i) => ({
+    from: ends.from ?? (i > 0 ? own[i - 1].to : bookingStart),
+    to: ends.to ?? (i < own.length - 1 ? own[i + 1].from : bookingEnd),
+  }));
+}
+
+function legStop(stop: StoredLeg['from'], at: Point | null): PublicApiTransitLegStop {
+  return {
+    name: stop?.name ?? null,
+    time: stop?.time ?? null,
+    track: stop?.track ?? null,
+    lat: at?.lat ?? null,
+    lng: at?.lng ?? null,
+  };
+}
+
+/**
+ * The legs of a public transport journey, read from the booking's metadata, with
+ * the booking's own points (`endpoints`) to place the ends nothing else places.
  *
  * Field by field, never the stored object: the leg also holds its drawn line
- * and the line's colours, which the contract leaves out. A booking without a
- * journey, or whose metadata does not decode, has no legs.
+ * and the line's colours, which the contract leaves out; the line is read here
+ * only to place the leg's ends. A booking without a journey, or whose metadata
+ * does not decode, has no legs.
  */
-export function transitLegsOf(metadata: string | null): PublicApiTransitLeg[] {
+export function transitLegsOf(
+  metadata: string | null,
+  endpoints: readonly PublicApiReservationEndpoint[] = [],
+): PublicApiTransitLeg[] {
   if (!metadata) return [];
   const transit = storedTransitSchema.safeParse(decodeJson(RESERVATION_METADATA, metadata, 'public api').transit);
   if (!transit.success) return [];
-  return transit.data.legs.flatMap((raw) => {
+  const legs = transit.data.legs.flatMap((raw) => {
     const parsed = storedLegSchema.safeParse(raw);
-    if (!parsed.success) return [];
-    const leg = parsed.data;
-    return [
-      {
-        mode: leg.mode,
-        line: leg.line ?? null,
-        headsign: leg.headsign ?? null,
-        agency: leg.agency ?? null,
-        duration_s: leg.duration ?? null,
-        stops: leg.stops ?? null,
-        from: legStop(leg.from),
-        to: legStop(leg.to),
-      },
-    ];
+    return parsed.success ? [parsed.data] : [];
   });
+  const ends = legEnds(legs, endpoints);
+  return legs.map((leg, i) => ({
+    mode: leg.mode,
+    line: leg.line ?? null,
+    headsign: leg.headsign ?? null,
+    agency: leg.agency ?? null,
+    duration_s: leg.duration ?? null,
+    stops: leg.stops ?? null,
+    from: legStop(leg.from, ends[i].from),
+    to: legStop(leg.to, ends[i].to),
+  }));
 }

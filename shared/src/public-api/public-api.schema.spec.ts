@@ -37,8 +37,8 @@ const LEG = {
   agency: 'České dráhy',
   duration_s: 8880,
   stops: 2,
-  from: { name: 'Brno hl.n.', time: '08:28', track: '3' },
-  to: { name: 'Praha hl.n.', time: '10:56', track: '5' },
+  from: { name: 'Brno hl.n.', time: '08:28', track: '3', lat: 49.19, lng: 16.61 },
+  to: { name: 'Praha hl.n.', time: '10:56', track: '5', lat: 50.08, lng: 14.43 },
 };
 
 describe('public API v1 tour fields', () => {
@@ -110,5 +110,14 @@ describe('public API v1 transport fields', () => {
   it('describes a walk leg, which has no line', () => {
     const walk = { ...LEG, mode: 'WALK', line: null, headsign: null, agency: null, stops: 0 };
     expect(publicApiTransitLegSchema.safeParse(walk).success).toBe(true);
+  });
+
+  it('places each end of a leg, or says it cannot with null', () => {
+    const unplaced = { name: null, time: null, track: null, lat: null, lng: null };
+    expect(publicApiTransitLegSchema.safeParse({ ...LEG, from: unplaced }).success).toBe(true);
+    expect(publicApiTransitLegSchema.safeParse({ ...LEG, to: { ...LEG.to, lat: 91 } }).success).toBe(false);
+    expect(publicApiTransitLegSchema.safeParse({ ...LEG, to: { ...LEG.to, lng: -181 } }).success).toBe(false);
+    const { lat: _lat, ...withoutLat } = LEG.from;
+    expect(publicApiTransitLegSchema.safeParse({ ...LEG, from: withoutLat }).success).toBe(false);
   });
 });

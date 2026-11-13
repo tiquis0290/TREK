@@ -362,6 +362,7 @@ function toReservation(
   row: Omit<ReservationRow, 'day_id'>,
   endpoints: Map<number, PublicApiReservationEndpoint[]>,
 ): PublicApiReservation {
+  const points = endpoints.get(row.id) ?? [];
   return {
     type: row.type ?? null,
     title: row.title ?? null,
@@ -370,8 +371,8 @@ function toReservation(
     end_time: row.reservation_end_time ?? null,
     status: row.status ?? null,
     notes: row.notes ?? null,
-    endpoints: endpoints.get(row.id) ?? [],
-    legs: transitLegsOf(row.metadata ?? null),
+    endpoints: points,
+    legs: transitLegsOf(row.metadata ?? null, points),
   };
 }
 

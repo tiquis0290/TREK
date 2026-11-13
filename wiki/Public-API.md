@@ -207,13 +207,15 @@ Every booking has two more lists, empty when there is nothing to put in them:
 ```json
 { "mode": "LONG_DISTANCE", "line": "EC 278", "headsign": "Praha hl.n.", "agency": "České dráhy",
   "duration_s": 8880, "stops": 2,
-  "from": { "name": "Brno hl.n.", "time": "08:28", "track": "3" },
-  "to":   { "name": "Praha hl.n.", "time": "10:56", "track": "5" } }
+  "from": { "name": "Brno hl.n.", "time": "08:28", "track": "3", "lat": 49.1906, "lng": 16.6128 },
+  "to":   { "name": "Praha hl.n.", "time": "10:56", "track": "5", "lat": 50.0831, "lng": 14.4348 } }
 ```
 
 `mode` is the journey planner's word (`WALK`, `BUS`, `TRAM`, `SUBWAY`, `REGIONAL_RAIL`, `LONG_DISTANCE` …) and is passed through unmapped. `stops` counts the stops between boarding and getting off, `duration_s` is in seconds, and the times are local, like the endpoints'. A walk has no `line`. What TREK keeps beside a leg for its own map, the drawn line and the line's colours, is not part of the payload, and neither are prices or confirmation codes.
 
-With both, the next change of a journey is a lookup: the first leg whose `from.time` is still ahead names the stop, the line and the track.
+Each end of a leg also says where it is (`lat`, `lng`), so a change can be walked: from the stop one ride leaves you at to the platform the next one leaves from, which is not among the `endpoints`. TREK takes the place the journey was saved with; for a journey saved before it kept one, the matching end of the leg's line; for a leg with neither (often a walk), the end of the leg before it or the start of the leg after it, and for the first and last leg the booking's own start and destination. An end nothing places has `lat` and `lng` `null`.
+
+With both, the next change of a journey is a lookup: the first leg whose `from.time` is still ahead names the stop, the line, the track and where to go.
 
 ### `GET /api/v1/trips/{id}/tours/{tourRef}/gpx`
 

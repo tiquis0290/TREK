@@ -889,10 +889,32 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
         agency: 'České dráhy',
         duration_s: 8880,
         stops: 2,
-        from: { name: 'Brno hl.n.', time: '08:28', track: '3' },
-        to: { name: 'Praha hl.n.', time: '10:56', track: '5' },
+        from: { name: 'Brno hl.n.', time: '08:28', track: '3', lat: 3.85, lng: -12.02 },
+        to: { name: 'Praha hl.n.', time: '10:56', track: '5', lat: 3.85, lng: -12.02 },
       });
       expect(JSON.stringify(journey)).not.toMatch(/geometry|line_color|provider/);
+    });
+
+    it('PUBAPI-TRANSIT-003: every leg end is placed, from its line or, for a walk without one, its neighbours', async () => {
+      // The fixture's legs store no place, as journeys saved before places were
+      // stored with them. Each line here decodes to a single point: the tram's to
+      // 49.11096 N 16.09024 E, the train's (read at its precision 6) to 3.85 N 12.02 W.
+      const res = await get('/api/v1/trips/3?include=reservations', ADA_TOKEN);
+      const [journey] = res.body.days[0].reservations;
+      const place = (end: { lat: number | null; lng: number | null }) => [end.lat, end.lng];
+      const tram = [49.11096, 16.09024];
+      const train = [3.85, -12.02];
+      expect(
+        journey.legs.map((leg: { from: { lat: number; lng: number }; to: { lat: number; lng: number } }) => [
+          place(leg.from),
+          place(leg.to),
+        ]),
+      ).toEqual([
+        [tram, tram],
+        // The walk has no line: it starts where the tram ends and ends where the train starts.
+        [tram, train],
+        [train, train],
+      ]);
     });
 
     it('PUBAPI-TRANSIT-002: a booking that is no journey has empty endpoints and legs', async () => {

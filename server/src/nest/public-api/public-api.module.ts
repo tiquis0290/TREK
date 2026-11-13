@@ -26,6 +26,9 @@ import { Module } from '@nestjs/common';
  * which reads app_settings on init. A read-only surface that cannot start without
  * half the application is one that breaks for reasons it has nothing to do with.
  *
+ * The tour file routes read through the `TOUR_FILES` port
+ * (`tour-files.interface.ts`), which Tours binds globally, for the same reason.
+ *
  * That constraint is why `GET /api/v1/stats` is not declared here: its figures are
  * AtlasService's, so the route lives in `atlas/` instead and provides this guard
  * class itself. No module edge either way — which is the point.

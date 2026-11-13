@@ -10,9 +10,11 @@
 import { DayAccommodations } from '../../../../src/db/entities/DayAccommodations.entity';
 import { DayAssignments } from '../../../../src/db/entities/DayAssignments.entity';
 import { Days } from '../../../../src/db/entities/Days.entity';
+import { Places } from '../../../../src/db/entities/Places.entity';
 import { ReservationDayPositions } from '../../../../src/db/entities/ReservationDayPositions.entity';
 import { ReservationEndpoints } from '../../../../src/db/entities/ReservationEndpoints.entity';
 import { Reservations } from '../../../../src/db/entities/Reservations.entity';
+import { Tours } from '../../../../src/db/entities/Tours.entity';
 import { Trips } from '../../../../src/db/entities/Trips.entity';
 import type { DayNotesRepository } from '../../../../src/db/repositories/DayNotes.repository';
 import type { DaysRepository } from '../../../../src/db/repositories/Days.repository';
@@ -925,7 +927,7 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
     const legacy = testDb
       .prepare(
         `
-      SELECT day_id, type, title, location, reservation_time, reservation_end_time, status, notes
+      SELECT id, day_id, type, title, location, reservation_time, reservation_end_time, status, notes, metadata
       FROM reservations WHERE trip_id = ? AND day_id IS NOT NULL
       ORDER BY day_id ASC, reservation_time ASC`,
       )
@@ -948,7 +950,7 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
     const legacy = testDb
       .prepare(
         `
-      SELECT type, title, location, reservation_time, reservation_end_time, status, notes
+      SELECT id, type, title, location, reservation_time, reservation_end_time, status, notes, metadata
       FROM reservations WHERE trip_id = ? AND day_id IS NULL
       ORDER BY reservation_time ASC, id ASC`,
       )
@@ -997,13 +999,18 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
     createDayAssignment(testDb, days[0].id, assigned.id);
     const staying = createPlace(testDb, trip.id, { name: 'Hotel' });
     createDayAccommodation(testDb, trip.id, staying.id, days[0].id, days[1].id);
+    // A tour on the shortlist brings its type, length and whether it has a line.
+    const tour = createPlace(testDb, trip.id, { name: 'Ridge walk' });
+    await updateRows(await orm(), Places, { id: tour.id }, { route_geometry: '[[47.4,10.9],[47.5,11]]' });
+    await insertRow(await orm(), Tours, { place: tour.id, tourTypeRef: 'hike', distance: 12.5 });
 
     // test-sql-allow: the legacy statement is the oracle the repository read is held to.
     const legacy = testDb
       .prepare(
         `
-      SELECT p.name, p.address, p.lat, p.lng, p.place_time, p.end_time, p.duration_minutes, p.notes, p.transport_mode, c.name as category
-      FROM places p LEFT JOIN categories c ON c.id = p.category_id
+      SELECT p.name, p.address, p.lat, p.lng, p.place_time, p.end_time, p.duration_minutes, p.notes, p.transport_mode, c.name as category,
+        p.id as place_id, t.tour_type, t.distance as tour_distance_km, p.route_geometry IS NOT NULL as has_route
+      FROM places p LEFT JOIN categories c ON c.id = p.category_id LEFT JOIN tours t ON t.place_id = p.id
       WHERE p.trip_id = ?
         AND NOT EXISTS (SELECT 1 FROM day_assignments da WHERE da.place_id = p.id)
         AND NOT EXISTS (SELECT 1 FROM day_accommodations a WHERE a.place_id = p.id)
@@ -1013,7 +1020,45 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
 
     const typed = await reservationsRepo.listUnplannedPlacesForPublicApi(trip.id);
     expect(typed).toEqual(legacy);
-    expect(typed.map((p) => p.name)).toEqual([unplanned.name]);
+    expect(typed.map((p) => p.name)).toEqual([unplanned.name, 'Ridge walk']);
+    expect(typed[0]).toMatchObject({ place_id: unplanned.id, tour_type: null, tour_distance_km: null, has_route: 0 });
+    expect(typed[1]).toMatchObject({ place_id: tour.id, tour_type: 'hike', tour_distance_km: 12.5, has_route: 1 });
+  });
+
+  it('listEndpointsForPublicApi — every point of the trip, per booking in travel order, no other trip', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const other = createTrip(testDb, user.id);
+    const journey = createReservation(testDb, trip.id, { title: 'Journey', type: 'transit' });
+    const flight = createReservation(testDb, trip.id, { title: 'Flight', type: 'flight' });
+    const elsewhere = createReservation(testDb, other.id, { title: 'Elsewhere', type: 'train' });
+    // Inserted out of order: the sequence decides.
+    await insertReservationEndpoint(journey.id, 'to', 2, { name: 'Praha', local_time: '10:56' });
+    await insertReservationEndpoint(journey.id, 'from', 0, { name: 'Brno', local_date: '2026-08-01' });
+    await insertReservationEndpoint(journey.id, 'stop', 1, { name: 'Pardubice', code: 'PCE' });
+    await insertReservationEndpoint(flight.id, 'from', 0, { name: 'FRA' });
+    await insertReservationEndpoint(elsewhere.id, 'from', 0, { name: 'Not this trip' });
+
+    const rows = await reservationsRepo.listEndpointsForPublicApi(trip.id);
+
+    expect(rows.map((r) => [r.reservation_id, r.role, r.name])).toEqual([
+      [journey.id, 'from', 'Brno'],
+      [journey.id, 'stop', 'Pardubice'],
+      [journey.id, 'to', 'Praha'],
+      [flight.id, 'from', 'FRA'],
+    ]);
+    expect(rows[0]).toEqual({
+      reservation_id: journey.id,
+      role: 'from',
+      name: 'Brno',
+      code: null,
+      lat: 48,
+      lng: 11,
+      local_date: '2026-08-01',
+      local_time: null,
+    });
+    expect(rows[1]).toMatchObject({ code: 'PCE' });
+    expect(await reservationsRepo.listEndpointsForPublicApi(other.id + 1000)).toEqual([]);
   });
 });
 

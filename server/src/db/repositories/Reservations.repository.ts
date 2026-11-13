@@ -9,26 +9,11 @@ import { TrekRepository } from './_shared/trek-repository';
 import { passContextQuery, type PassContextDB } from './_shared/reservation-pass-context';
 import type { DB } from '../kysely/db';
 import { ROADTRIP_RESERVATION_TYPES } from '@trek/shared';
-import type {
-  PublicApiAccommodationKyselyDB,
-  PublicApiAccommodationRow,
-  PublicApiReservationKyselyDB,
-  PublicApiScheduledReservationRow,
-  PublicApiUnplannedPlaceKyselyDB,
-  PublicApiUnplannedPlaceRow,
-  PublicApiUnscheduledReservationRow,
-} from './reservation-public-api-rows';
+import type * as PublicApiRows from './reservation-public-api-rows';
 import type { ReservationAllColumnsRow, ReservationJoinRow } from './reservation-rows';
 
 // The reservation row shapes live in their own module; re-exported so callers keep one import path.
 export type { ReservationAllColumnsRow, ReservationJoinRow } from './reservation-rows';
-// The public API row types moved to their own module; re-exported so callers keep one import path.
-export type {
-  PublicApiAccommodationRow,
-  PublicApiScheduledReservationRow,
-  PublicApiUnplannedPlaceRow,
-  PublicApiUnscheduledReservationRow,
-};
 
 /**
  * Kysely typing for the RS18/RR1 join (`joinedQuery` below) — `reservations
@@ -1200,35 +1185,49 @@ export class ReservationsRepository extends TrekRepository<Reservations> {
     return rows.map((r) => r.place_id as number);
   }
 
-  /** `public-api.service.ts::reservationsByDay` (Task 5's `// Task 2` pickup) — see {@link PublicApiScheduledReservationRow}'s docstring. */
-  async listScheduledForPublicApi(trip_id: number): Promise<PublicApiScheduledReservationRow[]> {
-    const rows = await this.kysely<PublicApiReservationKyselyDB>()
+  /** `public-api.service.ts::reservationsByDay`, see {@link PublicApiRows.PublicApiScheduledReservationRow}. */
+  async listScheduledForPublicApi(trip_id: number): Promise<PublicApiRows.PublicApiScheduledReservationRow[]> {
+    const rows = await this.kysely<PublicApiRows.PublicApiReservationKyselyDB>()
       .selectFrom('reservations')
-      .select(['day_id', 'type', 'title', 'location', 'reservation_time', 'reservation_end_time', 'status', 'notes'])
+      .select(['id', 'day_id', 'type', 'title', 'location', 'reservation_time', 'reservation_end_time', 'status'])
+      .select(['notes', 'metadata'])
       .where('trip_id', '=', trip_id)
       .where('day_id', 'is not', null)
       .orderBy('day_id', 'asc')
       .orderBy('reservation_time', 'asc')
       .execute();
-    return rows as PublicApiScheduledReservationRow[];
+    return rows as PublicApiRows.PublicApiScheduledReservationRow[];
   }
 
-  /** `public-api.service.ts::buildUnscheduledReservations` (Task 5's `// Task 2` pickup) — see {@link PublicApiUnscheduledReservationRow}'s docstring. */
-  async listUnscheduledForPublicApi(trip_id: number): Promise<PublicApiUnscheduledReservationRow[]> {
-    const rows = await this.kysely<PublicApiReservationKyselyDB>()
+  /** `public-api.service.ts::buildUnscheduledReservations`, see {@link PublicApiRows.PublicApiUnscheduledReservationRow}. */
+  async listUnscheduledForPublicApi(trip_id: number): Promise<PublicApiRows.PublicApiUnscheduledReservationRow[]> {
+    const rows = await this.kysely<PublicApiRows.PublicApiReservationKyselyDB>()
       .selectFrom('reservations')
-      .select(['type', 'title', 'location', 'reservation_time', 'reservation_end_time', 'status', 'notes'])
+      .select(['id', 'type', 'title', 'location', 'reservation_time', 'reservation_end_time', 'status', 'notes'])
+      .select(['metadata'])
       .where('trip_id', '=', trip_id)
       .where('day_id', 'is', null)
       .orderBy('reservation_time', 'asc')
       .orderBy('id', 'asc')
       .execute();
-    return rows as PublicApiUnscheduledReservationRow[];
+    return rows as PublicApiRows.PublicApiUnscheduledReservationRow[];
   }
 
-  /** `public-api.service.ts::buildAccommodations` (Task 5's `// Task 3` pickup) — see {@link PublicApiAccommodationRow}'s docstring. */
-  async listAccommodationsForPublicApi(trip_id: number): Promise<PublicApiAccommodationRow[]> {
-    const rows = await this.kysely<PublicApiAccommodationKyselyDB>()
+  /** `public-api.service.ts::endpointsByReservation`, see {@link PublicApiRows.PublicApiEndpointRow}. */
+  async listEndpointsForPublicApi(trip_id: number): Promise<PublicApiRows.PublicApiEndpointRow[]> {
+    return await this.kysely<PublicApiRows.PublicApiEndpointKyselyDB>()
+      .selectFrom('reservation_endpoints as e')
+      .innerJoin('reservations as r', 'r.id', 'e.reservation_id')
+      .select(['e.reservation_id', 'e.role', 'e.name', 'e.code', 'e.lat', 'e.lng', 'e.local_date', 'e.local_time'])
+      .where('r.trip_id', '=', trip_id)
+      .orderBy('e.reservation_id', 'asc')
+      .orderBy('e.sequence', 'asc')
+      .execute();
+  }
+
+  /** `public-api.service.ts::buildAccommodations`, see {@link PublicApiRows.PublicApiAccommodationRow}. */
+  async listAccommodationsForPublicApi(trip_id: number): Promise<PublicApiRows.PublicApiAccommodationRow[]> {
+    const rows = await this.kysely<PublicApiRows.PublicApiAccommodationKyselyDB>()
       .selectFrom('day_accommodations as a')
       .leftJoin('places as p', 'p.id', 'a.place_id')
       .leftJoin('days as ds', 'ds.id', 'a.start_day_id')
@@ -1237,17 +1236,19 @@ export class ReservationsRepository extends TrekRepository<Reservations> {
       .where('a.trip_id', '=', trip_id)
       .orderBy('ds.date', 'asc')
       .execute();
-    return rows as PublicApiAccommodationRow[];
+    return rows as PublicApiRows.PublicApiAccommodationRow[];
   }
 
-  /** `public-api.service.ts::buildUnplannedPlaces` (Task 5's `// Task 3` pickup) — see {@link PublicApiUnplannedPlaceRow}'s docstring. */
-  async listUnplannedPlacesForPublicApi(trip_id: number): Promise<PublicApiUnplannedPlaceRow[]> {
-    const rows = await this.kysely<PublicApiUnplannedPlaceKyselyDB>()
+  /** `public-api.service.ts::buildUnplannedPlaces`, see {@link PublicApiRows.PublicApiUnplannedPlaceRow}. */
+  async listUnplannedPlacesForPublicApi(trip_id: number): Promise<PublicApiRows.PublicApiUnplannedPlaceRow[]> {
+    const rows = await this.kysely<PublicApiRows.PublicApiUnplannedPlaceKyselyDB>()
       .selectFrom('places as p')
       .leftJoin('categories as c', 'c.id', 'p.category_id')
+      .leftJoin('tours as t', 't.place_id', 'p.id')
       .select((eb) => [
         'p.name', 'p.address', 'p.lat', 'p.lng', 'p.place_time', 'p.end_time',
         'p.duration_minutes', 'p.notes', 'p.transport_mode', 'c.name as category',
+        'p.id as place_id', 't.tour_type', 't.distance as tour_distance_km', eb('p.route_geometry', 'is not', null).as('has_route'),
       ])
       .where('p.trip_id', '=', trip_id)
       .where((eb) => eb.not(eb.exists(eb.selectFrom('day_assignments as da').select('da.id').whereRef('da.place_id', '=', 'p.id'))))
@@ -1255,7 +1256,7 @@ export class ReservationsRepository extends TrekRepository<Reservations> {
       .orderBy('p.created_at', 'asc')
       .orderBy('p.id', 'asc')
       .execute();
-    return rows as PublicApiUnplannedPlaceRow[];
+    return rows as PublicApiRows.PublicApiUnplannedPlaceRow[];
   }
 
   // ---------------------------------------------------------------------------

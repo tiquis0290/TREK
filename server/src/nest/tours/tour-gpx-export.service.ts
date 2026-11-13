@@ -7,7 +7,7 @@ import type { ToursRepository } from '../../db/repositories/Tours.repository';
 import { DomainError } from '../common/domain-error';
 import { toRowId } from '../common/row-id';
 import { PlaceImportService } from '../place-import/place-import.service';
-import { gpxActivityOf } from './tour-gpx-export.helpers';
+import { fitSportOf, gpxActivityOf } from './tour-gpx-export.helpers';
 import { InjectRepository } from '@mikro-orm/nestjs';
 import { Injectable, NotFoundException } from '@nestjs/common';
 
@@ -27,11 +27,7 @@ export class TourGpxExportService {
   ) {}
 
   async export(tripId: string, placeId: string): Promise<{ gpx: string; filename: string }> {
-    const tid = toRowId(tripId);
-    const pid = toRowId(placeId);
-    const tour = tid !== null && pid !== null ? await this.toursRepo.findInTrip(tid, pid) : undefined;
-    const place = tour && tid !== null ? await this.placesRepo.findInTrip(tour.place_id, tid) : undefined;
-    if (!tour || !place || tid === null) throw new NotFoundException('Tour not found');
+    const { tid, tour, place } = await this.find(tripId, placeId);
     const stops = await this.namedStops(tid, tour.place_id);
 
     const gpx = this.placeImport.writeTourGpx({
@@ -42,10 +38,34 @@ export class TourGpxExportService {
       route_geometry: place.route_geometry ?? null,
       stops,
     });
-    if (!gpx) {
-      throw new DomainError(422, 'This tour has no route to export', { code: 'tour_without_route' });
-    }
+    if (!gpx) throw withoutRoute();
     return { gpx, filename: this.placeImport.tourGpxFilename(tour.name) };
+  }
+
+  /**
+   * The same tour as a FIT course, for a Garmin watch, which takes a downloaded
+   * course only as FIT. The same line and the same refusals as the GPX; a
+   * course has no waypoints, so the named stops stay out.
+   */
+  async exportFit(tripId: string, placeId: string): Promise<{ fit: Buffer; filename: string }> {
+    const { tour, place } = await this.find(tripId, placeId);
+    const fit = this.placeImport.writeTourFit({
+      name: tour.name,
+      sport: fitSportOf(tour.tour_type),
+      route_geometry: place.route_geometry ?? null,
+    });
+    if (!fit) throw withoutRoute();
+    return { fit, filename: this.placeImport.tourFitFilename(tour.name) };
+  }
+
+  /** The tour and its place in the trip, or the 404 both files answer when either is missing. */
+  private async find(tripId: string, placeId: string) {
+    const tid = toRowId(tripId);
+    const pid = toRowId(placeId);
+    const tour = tid !== null && pid !== null ? await this.toursRepo.findInTrip(tid, pid) : undefined;
+    const place = tour && tid !== null ? await this.placesRepo.findInTrip(tour.place_id, tid) : undefined;
+    if (!tour || !place || tid === null) throw new NotFoundException('Tour not found');
+    return { tid, tour, place };
   }
 
   /** The points that stand for a place of the trip (PR1-10), named after it, as the file's waypoints. */
@@ -63,4 +83,9 @@ export class TourGpxExportService {
       return name ? [{ name, lat: point.lat, lng: point.lng }] : [];
     });
   }
+}
+
+/** A tour without a line of its own is refused rather than written as a file that imports as nothing. */
+function withoutRoute(): DomainError {
+  return new DomainError(422, 'This tour has no route to export', { code: 'tour_without_route' });
 }

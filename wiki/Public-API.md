@@ -10,6 +10,8 @@ Read trips. That is deliberate and complete:
 
 - list the trips you own or are a member of
 - fetch one trip with its days, places in planned order, day notes, reservations, accommodations and fellow travellers
+- download a tour's route as a GPX file for a bike computer or a route planner, or as a FIT course for a watch
+- follow a public transport journey stop by stop: its points, lines, tracks and times
 - read the bucket list: places the traveller wants to reach, not tied to any trip
 - read a handful of totals for a dashboard widget: trips, countries, cities, places, days, flown distance, and the last trip taken
 
@@ -97,9 +99,9 @@ Pick what you need with `?include=`, comma-separated:
 | Section | What it adds |
 |---|---|
 | `days` | the itinerary spine: one entry per day, with `date`, `day_number`, `title`, `notes` |
-| `places` | stops on each day, **in planned order**, with coordinates, times, duration, category and transport mode |
+| `places` | stops on each day, **in planned order**, with coordinates, times, duration, category and transport mode; a tour also has its type, its length and a link to its route |
 | `notes` | timed free-text notes on a day |
-| `reservations` | bookings on their starting day: type, title, location, time, status |
+| `reservations` | bookings on their starting day: type, title, location, time, status; a transport booking also has its points, and a public transport journey its legs |
 | `accommodations` | where you sleep, with the date range resolved and check-in/check-out times |
 | `travellers` | who is on the trip, by display name |
 
@@ -140,14 +142,36 @@ curl -H "Authorization: Bearer trek_…" \
           "duration_minutes": 180,
           "category": "Museum",
           "notes": null,
-          "transport_mode": "walking"
+          "transport_mode": "walking",
+          "gpx_url": null, "fit_url": null, "tour_type": null, "distance_m": null
+        },
+        {
+          "name": "Ridge walk to Fiesole",
+          "address": null,
+          "lat": 43.80, "lng": 11.29,
+          "time": "09:00", "end_time": null,
+          "duration_minutes": 240,
+          "category": null,
+          "notes": null,
+          "transport_mode": "walking",
+          "gpx_url": "/api/v1/trips/12/tours/41/gpx",
+          "fit_url": "/api/v1/trips/12/tours/41/fit",
+          "tour_type": "hike",
+          "distance_m": 12346
         }
       ],
       "day_notes": [{ "text": "Bring the tickets", "time": "09:00" }],
       "reservations": [
         { "type": "flight", "title": "LH 1234", "location": "FRA",
           "time": "2026-06-14T08:00", "end_time": null,
-          "status": "confirmed", "notes": null }
+          "status": "confirmed", "notes": null,
+          "endpoints": [
+            { "role": "from", "name": "Frankfurt", "code": "FRA", "lat": 50.03, "lng": 8.56,
+              "local_date": "2026-06-14", "local_time": "08:00" },
+            { "role": "to", "name": "Florence", "code": "FLR", "lat": 43.81, "lng": 11.2,
+              "local_date": "2026-06-14", "local_time": "09:35" }
+          ],
+          "legs": [] }
       ]
     }
   ],
@@ -159,6 +183,59 @@ curl -H "Authorization: Bearer trek_…" \
   "travellers": [{ "name": "ada", "owner": true }, { "name": "bob", "owner": false }]
 }
 ```
+
+#### Tours
+
+A tour (a hike, a run, a ride, a ski or paddle route, a city walk) is a place like any other, at its starting point, with four more fields. They are `null` on every place that is no tour.
+
+| Field | What it is |
+|---|---|
+| `gpx_url` | where its route is served as a GPX file (see below), or `null` when the tour has no route of its own |
+| `fit_url` | where the same route is served as a FIT course (see below); `null` exactly when `gpx_url` is |
+| `tour_type` | the tour's type as TREK names it: `hike`, `run`, `bike`, `walk` (a city walk), `ski`, `kayak` (any paddle tour), `horse`, `food` … Passed through unmapped, like a booking's `type`, so expect values you have not seen |
+| `distance_m` | its length in whole metres, or `null` when TREK does not know it |
+
+`gpx_url` and `fit_url` are paths on your TREK instance. Resolve them against the base URL you already call the API at, and send the same key. Follow them rather than building them yourself: the reference in them is opaque, and the place carries no id you could build it from.
+
+#### Transport and public transport
+
+Every booking has two more lists, empty when there is nothing to put in them:
+
+- **`endpoints`** — the points of a transport booking in travel order: where it starts (`role: "from"`), each change on the way (`"stop"`) and where it ends (`"to"`). Each has a `name`, a `code` (an airport's IATA code, where there is one), `lat`/`lng`, and the `local_date` and `local_time` at that point, as a departure board there would show them. A stop carries the time the journey leaves it again.
+- **`legs`** — for a public transport journey planned in TREK (`type: "transit"`), each leg of it, walks included:
+
+```json
+{ "mode": "LONG_DISTANCE", "line": "EC 278", "headsign": "Praha hl.n.", "agency": "České dráhy",
+  "duration_s": 8880, "stops": 2,
+  "from": { "name": "Brno hl.n.", "time": "08:28", "track": "3" },
+  "to":   { "name": "Praha hl.n.", "time": "10:56", "track": "5" } }
+```
+
+`mode` is the journey planner's word (`WALK`, `BUS`, `TRAM`, `SUBWAY`, `REGIONAL_RAIL`, `LONG_DISTANCE` …) and is passed through unmapped. `stops` counts the stops between boarding and getting off, `duration_s` is in seconds, and the times are local, like the endpoints'. A walk has no `line`. What TREK keeps beside a leg for its own map, the drawn line and the line's colours, is not part of the payload, and neither are prices or confirmation codes.
+
+With both, the next change of a journey is a lookup: the first leg whose `from.time` is still ahead names the stop, the line and the track.
+
+### `GET /api/v1/trips/{id}/tours/{tourRef}/gpx`
+
+A tour's route as a GPX file, the same file TREK writes when you export a tour as GPX: the whole line with the heights it has, and the trip's places along it as named waypoints. Reach it through a place's `gpx_url`.
+
+```bash
+curl -H "Authorization: Bearer trek_…" -o ridge.gpx \
+     "https://trek.example.com/api/v1/trips/12/tours/41/gpx"
+```
+
+It answers `Content-Type: application/gpx+xml`. It needs the `places` scope as well as `trips`, since a tour is a place, and counts against the same rate limit as every other call. A trip you may not read is a `404`, exactly as for the trip itself; so is a tour the trip does not hold. A tour without a route answers `422` with `code: "tour_without_route"`.
+
+### `GET /api/v1/trips/{id}/tours/{tourRef}/fit`
+
+The same route as a FIT course file, for a watch. **Watches take a course only as FIT:** a Garmin watch app can save a course only by downloading it, and the watch refuses a GPX download. Reach it through a place's `fit_url`.
+
+```bash
+curl -H "Authorization: Bearer trek_…" -o ridge.fit \
+     "https://trek.example.com/api/v1/trips/12/tours/41/fit"
+```
+
+It answers `Content-Type: application/vnd.ant.fit`, with a file name ending in `.fit`. The course carries the whole line, each point with its height where the route has one, and the tour's type as the FIT sport (hiking, walking, running, cycling, cross-country skiing, paddling, otherwise generic). A course has no clock of its own, so its times are made up at walking pace from the moment it is downloaded. Scopes, rate limit, `404` and `422` are exactly those of the GPX route.
 
 ### `GET /api/v1/bucket-list`
 
@@ -236,11 +313,11 @@ A Homepage widget then needs no scripting:
 
 ## Notes for integrators
 
-**Join on dates, not ids.** Every day carries an ISO `date`, and accommodations carry a resolved date range rather than internal day ids. If your software keeps its own notion of a trip, the date is the one thing both sides can agree on. TREK's internal ids are not in the payload at all, by design — they would tie you to storage details that are free to change.
+**Join on dates, not ids.** Every day carries an ISO `date`, and accommodations carry a resolved date range rather than internal day ids. If your software keeps its own notion of a trip, the date is the one thing both sides can agree on. TREK's internal ids are not in the payload as fields, by design — they would tie you to storage details that are free to change. The one place a reference appears is inside a tour's `gpx_url` and `fit_url`, and those are links to follow, not ids to store.
 
 **One request, not many.** Rather than separate endpoints per section, `?include=` lets you fetch exactly what you need in a single call. Fetching a trip four times for four sections would burn your rate budget for no benefit.
 
-**There are no timezones.** Times are stored and returned exactly as the traveller typed them: `14:00` means two in the afternoon wherever they were. If you are matching against timestamps of your own, the trip's dates are the reliable join; the times are a hint, not a UTC instant.
+**There are no timezones.** Times are stored and returned exactly as the traveller typed them: `14:00` means two in the afternoon wherever they were. The points and legs of a journey follow the same rule: each time is local to the place it belongs to. If you are matching against timestamps of your own, the trip's dates are the reliable join; the times are a hint, not a UTC instant.
 
 **Rate limit: 120 requests per minute**, counted per user rather than per IP address. A self-hosted integration and its owner's browser often share an address, and an IP-based limit would let one starve the other. Exceeding it returns `429`; back off and retry.
 
@@ -248,10 +325,11 @@ A Homepage widget then needs no scripting:
 
 | Status | Meaning |
 |---|---|
-| `400` | malformed trip id, or an unknown `include` section |
+| `400` | malformed trip id or tour reference, or an unknown `include` section |
 | `401` | missing, malformed or unknown key — also what you get for a key of the wrong kind |
 | `403` | the key is valid but not allowed to read what was asked for (`code: "API_SCOPE_FORBIDDEN"`, with the missing section in `required_scope`) |
-| `404` | no such trip, or not one of yours |
+| `404` | no such trip, or not one of yours; for a tour file, also no such tour on the trip |
+| `422` | a tour's GPX or FIT was asked for, but the tour has no route (`code: "tour_without_route"`) |
 | `429` | rate limit exceeded |
 
 **Which TREK is running.** To check the running version, for example against the latest GitHub release, call `GET /api/auth/app-config`. It needs no key and no login, and the `version` field holds the running version (such as `5.0.0`). It is not part of `/api/v1`, so it follows the app's own release rather than the promise below.

@@ -1,4 +1,4 @@
-import { gpxActivityOf } from '../../../src/nest/tours/tour-gpx-export.helpers';
+import { fitSportOf, gpxActivityOf } from '../../../src/nest/tours/tour-gpx-export.helpers';
 
 import { describe, expect, it } from 'vitest';
 
@@ -47,5 +47,22 @@ describe('gpxActivityOf (PR1-06A, BIK-01, RUN-01, SKI-02, HOR-01)', () => {
 
   it('TOUR-GPX-ACTIVITY-007: a horse tour is horseback riding (HOR-01)', () => {
     expect(gpxActivityOf({ tour_type: 'horse' })).toBe('horseback_riding');
+  });
+});
+
+describe('fitSportOf (public API FIT course)', () => {
+  it('TOUR-FIT-SPORT-001: each tour type with a FIT sport names its number in the FIT profile', () => {
+    expect(fitSportOf('run')).toBe(1);
+    expect(fitSportOf('bike')).toBe(2);
+    expect(fitSportOf('walk')).toBe(11);
+    expect(fitSportOf('ski')).toBe(12);
+    expect(fitSportOf('hike')).toBe(17);
+    expect(fitSportOf('kayak')).toBe(19);
+  });
+
+  it('TOUR-FIT-SPORT-002: any other type is generic', () => {
+    expect(fitSportOf('horse')).toBe(0);
+    expect(fitSportOf('food')).toBe(0);
+    expect(fitSportOf('constructor')).toBe(0);
   });
 });

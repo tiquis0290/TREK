@@ -35,6 +35,27 @@ export const publicApiPlaceSchema = z.object({
   notes: z.string().nullable(),
   /** How the traveller reaches this stop from the previous one. */
   transport_mode: z.string().nullable(),
+  /**
+   * Where the tour's route is served as a GPX file, as a path on this instance
+   * (`/api/v1/trips/{id}/tours/{tourRef}/gpx`) to resolve against the base URL the
+   * caller already uses. Null when the place is no tour or the tour has no route.
+   * Follow it rather than building it: the reference in it is opaque.
+   */
+  gpx_url: z.string().nullable(),
+  /**
+   * The same route as a FIT course (`/api/v1/trips/{id}/tours/{tourRef}/fit`),
+   * the only form a Garmin watch takes a downloaded course in. Null exactly when
+   * `gpx_url` is.
+   */
+  fit_url: z.string().nullable(),
+  /**
+   * The tour's type as TREK names it (`hike`, `run`, `bike`, `walk`, `ski`,
+   * `kayak`, …), passed through unmapped like a booking's `type`. Null for a
+   * place that is no tour.
+   */
+  tour_type: z.string().nullable(),
+  /** The tour's length in whole metres, null when TREK does not know it or the place is no tour. */
+  distance_m: z.number().int().nonnegative().nullable(),
 });
 export type PublicApiPlace = z.infer<typeof publicApiPlaceSchema>;
 
@@ -44,6 +65,60 @@ export const publicApiDayNoteSchema = z.object({
   time: z.string().nullable(),
 });
 export type PublicApiDayNote = z.infer<typeof publicApiDayNoteSchema>;
+
+/**
+ * One point of a transport booking: where it starts (`from`), each change on the
+ * way (`stop`) and where it ends (`to`), in travel order.
+ *
+ * Times are local to the point, as the traveller reads them off a departure
+ * board. A stop carries the time the journey leaves it again, which is what a
+ * traveller standing there needs.
+ */
+export const publicApiReservationEndpointSchema = z.object({
+  role: z.enum(['from', 'stop', 'to']),
+  name: z.string(),
+  /** An airport's IATA code or a station's code, when the booking has one. */
+  code: z.string().nullable(),
+  lat: z.number(),
+  lng: z.number(),
+  /** `YYYY-MM-DD` at the point. */
+  local_date: z.string().nullable(),
+  /** `HH:MM` at the point. */
+  local_time: z.string().nullable(),
+});
+export type PublicApiReservationEndpoint = z.infer<typeof publicApiReservationEndpointSchema>;
+
+/** Where a transit leg starts or ends: the stop, the local `HH:MM` and the track or platform. */
+export const publicApiTransitLegStopSchema = z.object({
+  name: z.string().nullable(),
+  time: z.string().nullable(),
+  track: z.string().nullable(),
+});
+export type PublicApiTransitLegStop = z.infer<typeof publicApiTransitLegStopSchema>;
+
+/**
+ * One leg of a public transport journey, as TREK stored it when the journey was
+ * planned: a ride on one line, or the walk between two of them.
+ *
+ * `mode` is the planner's vocabulary (`WALK`, `BUS`, `TRAM`, `SUBWAY`,
+ * `REGIONAL_RAIL`, …), passed through unmapped. The line's drawn path, its
+ * colours and anything about the price stay inside.
+ */
+export const publicApiTransitLegSchema = z.object({
+  mode: z.string(),
+  /** The line as the operator names it (`S1`, `ICE 597`); null on a walk. */
+  line: z.string().nullable(),
+  /** Where the vehicle is headed, as shown on its front. */
+  headsign: z.string().nullable(),
+  agency: z.string().nullable(),
+  /** How long the leg takes, in seconds. */
+  duration_s: z.number().nullable(),
+  /** How many stops the vehicle makes between boarding and leaving it. */
+  stops: z.number().nullable(),
+  from: publicApiTransitLegStopSchema,
+  to: publicApiTransitLegStopSchema,
+});
+export type PublicApiTransitLeg = z.infer<typeof publicApiTransitLegSchema>;
 
 /**
  * A booking. `type` is TREK's own vocabulary (flight, train, restaurant, …) and is
@@ -59,6 +134,16 @@ export const publicApiReservationSchema = z.object({
   end_time: z.string().nullable(),
   status: z.string().nullable(),
   notes: z.string().nullable(),
+  /**
+   * The points of a transport booking in travel order: `from`, each `stop`, `to`.
+   * Empty for a booking that is not transport, or one saved without them.
+   */
+  endpoints: z.array(publicApiReservationEndpointSchema),
+  /**
+   * The legs of a public transport journey (`type: transit`), in travel order and
+   * walks included. Empty for every other booking.
+   */
+  legs: z.array(publicApiTransitLegSchema),
 });
 export type PublicApiReservation = z.infer<typeof publicApiReservationSchema>;
 

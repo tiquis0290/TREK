@@ -1,3 +1,4 @@
+import { encodeFitCourse } from '../fit.codec';
 import { createGeometryNamer } from '../geometry-names';
 import { coord, gpxGeometryParser, writeGpx } from '../gpx.codec';
 import type { GpxImportOptions, PreparedGpxPlace } from '../place-import.types';
@@ -192,12 +193,30 @@ export function buildTourGpx(tour: GpxTourExport): string | null {
   });
 }
 
+/** One tour as the FIT course writer needs it. */
+export interface FitTourExport {
+  name: string;
+  /** The FIT profile's sport number, e.g. 17 for hiking. */
+  sport: number;
+  /** JSON `[[lat, lng]]` or `[[lat, lng, ele]]`, the tour's saved line. */
+  route_geometry: string | null;
+}
+
+/**
+ * One tour as a FIT course, the form a Garmin watch takes a downloaded course
+ * in: the same line as the GPX, every point with the height it has. Null when
+ * the tour has no line of at least two points, as for the GPX.
+ */
+export function buildTourFit(tour: FitTourExport, createdAt = new Date()): Buffer | null {
+  return encodeFitCourse(tour.name, tour.sport, parseGeometry(tour.route_geometry), createdAt);
+}
+
 /** Filenames land on the receiving filesystem, so its reserved characters are
  *  folded away rather than escaped. Header safety is contentDisposition()'s
  *  job since #2165, which is why the title's own script survives here —
  *  沖縄 stays 沖縄 instead of being mangled into underscores. `fallback`
  *  names a file whose title folds away to nothing. */
-export function gpxFilename(tripTitle: string, fallback = 'trip'): string {
+export function gpxFilename(tripTitle: string, fallback = 'trip', extension = 'gpx'): string {
   const base = tripTitle
     // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f\x7f"\\/:*?<>|]+/g, ' ')
@@ -206,7 +225,7 @@ export function gpxFilename(tripTitle: string, fallback = 'trip'): string {
     .replaceAll(' ', '-');
   // Codepoints, not UTF-16 units: slice() would cut an emoji in half and the
   // lone surrogate is exactly what URI-encoding chokes on.
-  return `${[...base].slice(0, 60).join('') || fallback}.gpx`;
+  return `${[...base].slice(0, 60).join('') || fallback}.${extension}`;
 }
 
 /** A time written with its zone (`Z` or an offset); one without is local to an unknown clock and reads as none. */
@@ -348,5 +367,13 @@ export class GpxProvider {
 
   tourFilename(tourName: string): string {
     return gpxFilename(tourName, 'tour');
+  }
+
+  writeTourFit(tour: FitTourExport): Buffer | null {
+    return buildTourFit(tour);
+  }
+
+  tourFitFilename(tourName: string): string {
+    return gpxFilename(tourName, 'tour', 'fit');
   }
 }

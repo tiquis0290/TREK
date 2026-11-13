@@ -60,3 +60,21 @@ export function gpxActivityOf(tour: {
   if (type === 'horse') return HORSE_ACTIVITY;
   return type === 'hike' ? 'hiking' : type;
 }
+
+/**
+ * The sport a tour's FIT course names, as the FIT profile numbers its `sport`
+ * enum: the watch shows it and picks its activity profile by it. By tour type
+ * alone; a type without a FIT sport of its own is generic (0).
+ */
+const FIT_SPORT = new Map<string, number>([
+  ['run', 1], // running
+  ['bike', 2], // cycling
+  ['walk', 11], // walking
+  ['ski', 12], // cross_country_skiing
+  ['hike', 17], // hiking
+  ['kayak', 19], // paddling
+]);
+
+export function fitSportOf(tourType: string): number {
+  return FIT_SPORT.get(tourType) ?? 0;
+}

@@ -15,7 +15,13 @@ import { CollectionGpxProvider, type ExportedCollectionFile } from './providers/
 import { GoogleDirectionsProvider } from './providers/google-directions.provider';
 import { GoogleListProvider } from './providers/google-list.provider';
 import { GoogleMapsShortLinkProvider } from './providers/google-maps-short-link.provider';
-import { GpxProvider, type GpxExportInput, type GpxExportOptions, type GpxTourExport } from './providers/gpx.provider';
+import {
+  GpxProvider,
+  type FitTourExport,
+  type GpxExportInput,
+  type GpxExportOptions,
+  type GpxTourExport,
+} from './providers/gpx.provider';
 import { KmlProvider } from './providers/kml.provider';
 import { NaverListProvider } from './providers/naver-list.provider';
 import { Injectable } from '@nestjs/common';
@@ -84,6 +90,15 @@ export class PlaceImportService {
 
   tourGpxFilename(tourName: string): string {
     return this.gpx.tourFilename(tourName);
+  }
+
+  /** One tour as a FIT course for a watch, or null when it has no line to write. */
+  writeTourFit(tour: FitTourExport): Buffer | null {
+    return this.gpx.writeTourFit(tour);
+  }
+
+  tourFitFilename(tourName: string): string {
+    return this.gpx.tourFitFilename(tourName);
   }
 
   /** A list file as GPX (#2301). */

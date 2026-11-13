@@ -22,13 +22,17 @@ import { AtlasService } from '../../src/nest/atlas/atlas.service';
 import { PublicStatsController } from '../../src/nest/atlas/public-stats.controller';
 import { RateLimitModule } from '../../src/nest/common/rate-limit.module';
 import { TrekExceptionFilter } from '../../src/nest/common/trek-exception.filter';
+import { fitCrc } from '../../src/nest/place-import/fit.codec';
 import { ApiTokenGuard } from '../../src/nest/public-api/api-token.guard';
 import { PublicApiModule } from '../../src/nest/public-api/public-api.module';
 import { TokensModule } from '../../src/nest/tokens/tokens.module';
+import { TourGpxExportModule } from '../../src/nest/tours/tour-gpx-export.module';
 import { makeBucketListItem } from '../helpers/factories/atlas';
 import { makeCategory } from '../helpers/factories/places';
+import { makeReservation, makeReservationEndpoint } from '../helpers/factories/reservations';
 import { findRow, insertRow } from '../helpers/factories/rows';
 import { makeMcpToken } from '../helpers/factories/tokens';
+import { makeTour } from '../helpers/factories/tours';
 import { addTripMember } from '../helpers/factories/trips';
 import { makeUser } from '../helpers/factories/users';
 import { createTestMikroOrmModule, createTestOrm, type TestOrm } from '../helpers/test-orm';
@@ -81,6 +85,68 @@ const TRIPS_PLACES_TOKEN = 'trek_' + '1'.repeat(48);
 /** api_scopes that cannot be parsed — the fall-back-to-everything case. */
 const BROKEN_SCOPES_TOKEN = 'trek_' + 'f'.repeat(48);
 
+/** A hike's line as `places.route_geometry` stores it: `[lat, lng, height]` points. */
+const RIDGE = JSON.stringify([
+  [47.42, 10.98, 1210],
+  [47.43, 10.99, 1380],
+  [47.44, 11.01, 1525],
+]);
+
+/** The points of a tram-and-train journey, as the endpoint rows hold them. */
+const MENDLOVO = { name: 'Mendlovo náměstí', code: null, lat: 49.19, lng: 16.6, local_date: '2026-08-01' };
+const BRNO_HLN = { name: 'Brno hl.n.', code: null, lat: 49.19, lng: 16.61, local_date: '2026-08-01' };
+const PRAHA_HLN = { name: 'Praha hl.n.', code: null, lat: 50.08, lng: 14.43, local_date: '2026-08-01' };
+
+/** `metadata.transit` as `buildTransitReservationParts` writes it, line colours and geometry included. */
+const TRANSIT_METADATA = {
+  transit: {
+    provider: 'motis',
+    duration: 9480,
+    transfers: 1,
+    walk_seconds: 180,
+    legs: [
+      {
+        mode: 'TRAM',
+        line: '4',
+        line_color: '#e30613',
+        line_text_color: '#ffffff',
+        headsign: 'Hlavní nádraží',
+        agency: 'DPMB',
+        duration: 420,
+        stops: 3,
+        from: { name: 'Mendlovo náměstí', time: '08:02', track: null },
+        to: { name: 'Hlavní nádraží', time: '08:09', track: 'B' },
+        geometry: 'o~vjH_seaB',
+        geometry_precision: 5,
+      },
+      {
+        mode: 'WALK',
+        line: null,
+        headsign: null,
+        agency: null,
+        duration: 180,
+        stops: 0,
+        from: { name: 'Hlavní nádraží', time: '08:09', track: 'B' },
+        to: { name: 'Brno hl.n.', time: '08:12', track: null },
+        geometry: null,
+        geometry_precision: 5,
+      },
+      {
+        mode: 'LONG_DISTANCE',
+        line: 'EC 278',
+        headsign: 'Praha hl.n.',
+        agency: 'České dráhy',
+        duration: 8880,
+        stops: 2,
+        from: { name: 'Brno hl.n.', time: '08:28', track: '3' },
+        to: { name: 'Praha hl.n.', time: '10:56', track: '5' },
+        geometry: '_p~iF~ps|U',
+        geometry_precision: 6,
+      },
+    ],
+  },
+};
+
 /** Stubbed so /api/v1/stats can be mounted without AtlasModule's whole graph. */
 const STATS = {
   getTravelStats: () => ({
@@ -107,6 +173,8 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
         await createTestMikroOrmModule(db),
         RateLimitModule,
         TokensModule,
+        // Binds the TOUR_FILES port globally; in the app ToursModule imports it.
+        TourGpxExportModule,
         PublicApiModule,
       ],
       // `/api/v1/stats` lives in atlas/ because its figures do, but it is guarded
@@ -233,6 +301,27 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
     // The stop a booked night puts on its check-in day, so the route can reach the
     // hotel. It belongs to the stay, not to the day's plan.
     await insertRow(orm, DayAssignments, { day: 1, place: 3, order_index: 2, accommodation_id: 1 });
+
+    // Tours and a transit journey on the shared trip 3, so trip 1's payload stays as the cases above pin it.
+    await insertRow(orm, Days, { id: 30, trip: 3, day_number: 1, date: '2026-08-01' });
+    await insertRow(orm, Places, { id: 30, trip: 3, name: 'Gratweg', lat: 47.42, lng: 10.98, route_geometry: RIDGE });
+    await makeTour(orm, 30, { distance: 12.3456 });
+    await insertRow(orm, DayAssignments, { day: 30, place: 30, order_index: 0 });
+    await insertRow(orm, Places, { id: 31, trip: 3, name: 'Food walk', lat: 47.4, lng: 10.9 });
+    await makeTour(orm, 31, { tourTypeRef: 'food' });
+    // Bob's own trip holds a tour Ada must not be able to fetch.
+    await insertRow(orm, Places, { id: 32, trip: 2, name: 'Bobs Runde', lat: 1, lng: 2, route_geometry: RIDGE });
+    await makeTour(orm, 32);
+    const journey = await makeReservation(orm, 3, {
+      day: 30,
+      type: 'transit',
+      title: 'Mendlovo → Praha',
+      reservation_time: '2026-08-01T08:02',
+      metadata: JSON.stringify(TRANSIT_METADATA),
+    });
+    await makeReservationEndpoint(orm, journey.id, { ...MENDLOVO, role: 'from', sequence: 0 });
+    await makeReservationEndpoint(orm, journey.id, { ...BRNO_HLN, role: 'stop', sequence: 1 });
+    await makeReservationEndpoint(orm, journey.id, { ...PRAHA_HLN, role: 'to', sequence: 2 });
 
     app = await build();
     server = app.getHttpServer() as Server;
@@ -662,6 +751,154 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
       await get('/api/v1/trips', TRIPS_ONLY_TOKEN);
       const row = (await findRow(orm, McpTokens, { token_prefix: TRIPS_ONLY_TOKEN.slice(0, 13) }))!;
       expect(row.last_used_at).not.toBeNull();
+    });
+  });
+
+  describe('tours and transit', () => {
+    it('PUBAPI-TOUR-001: a tour carries its GPX link, its type and its length; a plain place none', async () => {
+      const res = await get('/api/v1/trips/3?include=places', ADA_TOKEN);
+      expect(res.status).toBe(200);
+      expect(res.body.days[0].places).toEqual([
+        expect.objectContaining({
+          name: 'Gratweg',
+          gpx_url: '/api/v1/trips/3/tours/30/gpx',
+          fit_url: '/api/v1/trips/3/tours/30/fit',
+          tour_type: 'hike',
+          distance_m: 12346,
+        }),
+      ]);
+      // A tour without a line of its own has nothing to download.
+      expect(res.body.unplanned_places).toEqual([
+        expect.objectContaining({
+          name: 'Food walk',
+          gpx_url: null,
+          fit_url: null,
+          tour_type: 'food',
+          distance_m: null,
+        }),
+      ]);
+      const plain = await get('/api/v1/trips/1?include=places', ADA_TOKEN);
+      expect(plain.body.days[0].places[0]).toMatchObject({ gpx_url: null, fit_url: null, tour_type: null });
+    });
+
+    it('PUBAPI-TOUR-002: the GPX link serves the route as a GPX file', async () => {
+      const listed = await get('/api/v1/trips/3?include=places', ADA_TOKEN);
+      // supertest buffers only text and JSON, so the GPX body is read as text by hand.
+      const res = await get(listed.body.days[0].places[0].gpx_url, ADA_TOKEN)
+        .buffer(true)
+        .parse((response, done) => {
+          let text = '';
+          response.setEncoding('utf8');
+          response.on('data', (chunk: string) => (text += chunk));
+          response.on('end', () => done(null, text));
+        });
+      const gpx = String(res.body);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/^application\/gpx\+xml/);
+      expect(res.headers['content-disposition']).toMatch(/^attachment/);
+      expect(gpx).toContain('<gpx');
+      expect(gpx).toContain('Gratweg');
+      // The whole line, one track point per stored point.
+      expect(gpx.match(/<trkpt /g)).toHaveLength(3);
+    });
+
+    it('PUBAPI-TOUR-006: the FIT link serves the route as a FIT course for a watch', async () => {
+      const listed = await get('/api/v1/trips/3?include=places', ADA_TOKEN);
+      // supertest buffers only text and JSON, so the FIT body is collected as bytes by hand.
+      const res = await get(listed.body.days[0].places[0].fit_url, ADA_TOKEN)
+        .buffer(true)
+        .parse((response, done) => {
+          const chunks: Buffer[] = [];
+          response.on('data', (chunk: Buffer) => chunks.push(chunk));
+          response.on('end', () => done(null, Buffer.concat(chunks)));
+        });
+      const fit = res.body as Buffer;
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/vnd.ant.fit');
+      expect(res.headers['content-disposition']).toMatch(/^attachment.*Gratweg\.fit/);
+      expect(fit.toString('ascii', 8, 12)).toBe('.FIT');
+      expect(fitCrc(fit)).toBe(0);
+      // file_id, course, lap and a timer start, one record per stored point, and a timer stop.
+      expect(fit.readUInt32LE(4)).toBe(fit.length - 16);
+      expect(fit.includes(Buffer.from('Gratweg\0'))).toBe(true);
+    });
+
+    it('PUBAPI-TOUR-003: a tour without a route is a 422 with tour_without_route, as GPX and as FIT', async () => {
+      const [gpx, fit] = await getEach(
+        ['/api/v1/trips/3/tours/31/gpx', ADA_TOKEN],
+        ['/api/v1/trips/3/tours/31/fit', ADA_TOKEN],
+      );
+      for (const res of [gpx, fit]) {
+        expect(res.status).toBe(422);
+        expect(res.body).toEqual({ error: 'This tour has no route to export', code: 'tour_without_route' });
+      }
+    });
+
+    it("PUBAPI-TOUR-004: another user's tour is a 404, like their trip", async () => {
+      const [foreign, foreignFit, missingTrip] = await getEach(
+        ['/api/v1/trips/2/tours/32/gpx', ADA_TOKEN],
+        ['/api/v1/trips/2/tours/32/fit', ADA_TOKEN],
+        ['/api/v1/trips/424242/tours/32/gpx', ADA_TOKEN],
+      );
+      expect(foreign.status).toBe(404);
+      expect(foreign.body).toEqual({ error: 'Trip not found' });
+      expect(foreignFit.status).toBe(404);
+      expect(foreignFit.body).toEqual(foreign.body);
+      expect(missingTrip.body).toEqual(foreign.body);
+      // A tour of another trip asked for through a trip the caller can read is no tour of that trip.
+      const [elsewhere, elsewhereFit] = await getEach(
+        ['/api/v1/trips/3/tours/32/gpx', ADA_TOKEN],
+        ['/api/v1/trips/3/tours/32/fit', ADA_TOKEN],
+      );
+      expect(elsewhere.status).toBe(404);
+      expect(elsewhere.body).toEqual({ error: 'Tour not found' });
+      expect(elsewhereFit.status).toBe(404);
+      expect(elsewhereFit.body).toEqual(elsewhere.body);
+    });
+
+    it('PUBAPI-TOUR-005: the GPX and the FIT need the places scope as well as trips', async () => {
+      const [narrow, narrowFit, allowed, allowedFit] = await getEach(
+        ['/api/v1/trips/3/tours/30/gpx', TRIPS_DAYS_TOKEN],
+        ['/api/v1/trips/3/tours/30/fit', TRIPS_DAYS_TOKEN],
+        ['/api/v1/trips/3/tours/30/gpx', TRIPS_PLACES_TOKEN],
+        ['/api/v1/trips/3/tours/30/fit', TRIPS_PLACES_TOKEN],
+      );
+      expect(narrow.status).toBe(403);
+      expect(narrow.body).toMatchObject({ code: 'API_SCOPE_FORBIDDEN', required_scope: 'places' });
+      expect(narrowFit.status).toBe(403);
+      expect(narrowFit.body).toEqual(narrow.body);
+      expect(allowed.status).toBe(200);
+      expect(allowedFit.status).toBe(200);
+    });
+
+    it('PUBAPI-TRANSIT-001: a journey carries its points in order and its legs without lines or colours', async () => {
+      const res = await get('/api/v1/trips/3?include=reservations', ADA_TOKEN);
+      expect(res.status).toBe(200);
+      const [journey] = res.body.days[0].reservations;
+      expect(journey).toMatchObject({ type: 'transit', title: 'Mendlovo → Praha' });
+      expect(journey.endpoints).toEqual([
+        { ...MENDLOVO, role: 'from', local_time: null },
+        { ...BRNO_HLN, role: 'stop', local_time: null },
+        { ...PRAHA_HLN, role: 'to', local_time: null },
+      ]);
+      expect(journey.legs.map((leg: { mode: string }) => leg.mode)).toEqual(['TRAM', 'WALK', 'LONG_DISTANCE']);
+      expect(journey.legs[2]).toEqual({
+        mode: 'LONG_DISTANCE',
+        line: 'EC 278',
+        headsign: 'Praha hl.n.',
+        agency: 'České dráhy',
+        duration_s: 8880,
+        stops: 2,
+        from: { name: 'Brno hl.n.', time: '08:28', track: '3' },
+        to: { name: 'Praha hl.n.', time: '10:56', track: '5' },
+      });
+      expect(JSON.stringify(journey)).not.toMatch(/geometry|line_color|provider/);
+    });
+
+    it('PUBAPI-TRANSIT-002: a booking that is no journey has empty endpoints and legs', async () => {
+      const res = await get('/api/v1/trips/1?include=reservations', ADA_TOKEN);
+      expect(res.body.days[0].reservations[0]).toMatchObject({ type: 'flight', endpoints: [], legs: [] });
+      expect(res.body.unscheduled_reservations[0]).toMatchObject({ endpoints: [], legs: [] });
     });
   });
 });

@@ -49,6 +49,7 @@ function makeService(
     accommodations?: unknown[];
     bucketList?: unknown[];
     endpoints?: unknown[];
+    tourStages?: Map<number, unknown[]>;
   } = {},
 ) {
   const membership = { listAccessibleTripIds: vi.fn().mockResolvedValue(overrides.accessibleIds ?? []) };
@@ -72,6 +73,7 @@ function makeService(
   const gpxExport = {
     export: vi.fn().mockResolvedValue({ gpx: '<gpx/>', filename: 'Ridge.gpx' }),
     exportFit: vi.fn().mockResolvedValue({ fit: Buffer.from('.FIT'), filename: 'Ridge.fit' }),
+    stagesOf: vi.fn().mockResolvedValue(overrides.tourStages ?? new Map()),
   };
   const service = new PublicApiService(
     membership as unknown as TripMembershipService,
@@ -144,6 +146,7 @@ describe('PublicApiService', () => {
         fit_url: null,
         tour_type: null,
         distance_m: null,
+        tour_stage: null,
       },
     ]);
     expect(day.day_notes).toEqual([{ text: 'Bring cash', time: null }]);
@@ -161,7 +164,7 @@ describe('PublicApiService', () => {
       },
     ]);
     // Every key is present on the wire, not just equal to null after a lookup.
-    expect(Object.keys(day.places[0]!)).toHaveLength(14);
+    expect(Object.keys(day.places[0]!)).toHaveLength(15);
     expect(Object.keys(day.reservations[0]!)).toHaveLength(9);
   });
 
@@ -205,6 +208,7 @@ describe('PublicApiService', () => {
       fit_url: '/api/v1/trips/7/tours/41/fit',
       tour_type: 'hike',
       distance_m: 12346,
+      tour_stage: null,
     });
     expect(trip?.unplanned_places?.[0]).toMatchObject({
       gpx_url: '/api/v1/trips/7/tours/42/gpx',
@@ -270,8 +274,9 @@ describe('PublicApiService', () => {
         agency: 'DPMB',
         duration_s: 420,
         stops: 3,
-        from: { name: 'Mendlovo', time: '08:02', track: null },
-        to: { name: 'Hlavni nadrazi', time: '08:09', track: 'B' },
+        // No place stored and a line that decodes to nothing: the booking's start, and no destination to fall back to.
+        from: { name: 'Mendlovo', time: '08:02', track: null, lat: 49.2, lng: 16.6 },
+        to: { name: 'Hlavni nadrazi', time: '08:09', track: 'B', lat: null, lng: null },
       },
     ]);
     const [flight] = trip?.unscheduled_reservations ?? [];
@@ -292,15 +297,69 @@ describe('PublicApiService', () => {
       body: '<gpx/>',
       filename: 'Ridge.gpx',
     });
-    expect(readable.gpxExport.export).toHaveBeenCalledWith('7', '41');
+    expect(readable.gpxExport.export).toHaveBeenCalledWith('7', '41', undefined);
     await expect(readable.service.getTourFile(7, 41, 1, 'fit')).resolves.toEqual({
       body: Buffer.from('.FIT'),
       filename: 'Ridge.fit',
     });
-    expect(readable.gpxExport.exportFit).toHaveBeenCalledWith('7', '41');
+    expect(readable.gpxExport.exportFit).toHaveBeenCalledWith('7', '41', undefined);
+    await readable.service.getTourFile(7, 41, 1, 'fit', 'hut');
+    expect(readable.gpxExport.exportFit).toHaveBeenLastCalledWith('7', '41', 'hut');
 
     const hidden = makeService({ accessible: false });
     await expect(hidden.service.getTourFile(7, 41, 1, 'fit')).resolves.toBeNull();
     expect(hidden.gpxExport.exportFit).not.toHaveBeenCalled();
+  });
+
+  it('PUBAPI-SVC-013: MDT-02 a day holding one stage of a multi-day tour hands out that stage, its links and length', async () => {
+    const tour = { place_id: 41, tour_type: 'hike', tour_distance_km: 30, has_route: 1 };
+    const stages = new Map([
+      [
+        41,
+        [
+          { key: 'start', number: 1, count: 2, distance_m: 14000 },
+          { key: 'hut/1', number: 2, count: 2, distance_m: 16000 },
+        ],
+      ],
+    ]);
+    const { service, gpxExport } = makeService({
+      days: [
+        { id: 70, day_number: 1, date: '2026-06-14' },
+        { id: 71, day_number: 2, date: '2026-06-15' },
+        { id: 72, day_number: 3, date: '2026-06-16' },
+      ],
+      assignedPlaces: [
+        { day_id: 70, name: 'Hut to hut', ...tour, tour_stage_key: 'start' },
+        { day_id: 71, name: 'Hut to hut', ...tour, tour_stage_key: 'hut/1' },
+        { day_id: 72, name: 'Hut to hut', ...tour, tour_stage_key: 'gone' },
+        { day_id: 72, name: 'Lake loop', ...tour, place_id: 42, tour_stage_key: null },
+      ],
+      tourStages: stages,
+    });
+    const trip = await service.getTrip(7, 1, ['places']);
+    expect(gpxExport.stagesOf).toHaveBeenCalledWith(7, [41, 41, 41]);
+    expect(trip?.days?.[1]?.places[0]).toMatchObject({
+      gpx_url: '/api/v1/trips/7/tours/41/gpx?stage=hut%2F1',
+      fit_url: '/api/v1/trips/7/tours/41/fit?stage=hut%2F1',
+      distance_m: 16000,
+      tour_stage: { number: 2, count: 2 },
+    });
+    expect(trip?.days?.[0]?.places[0]).toMatchObject({ distance_m: 14000, tour_stage: { number: 1, count: 2 } });
+    // A stage the tour no longer has leaves the day with the whole tour, as does a day tour.
+    expect(trip?.days?.[2]?.places).toMatchObject([
+      { fit_url: '/api/v1/trips/7/tours/41/fit', distance_m: 30000, tour_stage: null },
+      { fit_url: '/api/v1/trips/7/tours/42/fit', tour_stage: null },
+    ]);
+  });
+
+  it('PUBAPI-SVC-014: MDT-02 asks Tours for no stages when no day holds one', async () => {
+    const { service, gpxExport } = makeService({
+      days: [{ id: 70, day_number: 1, date: '2026-06-14' }],
+      assignedPlaces: [
+        { day_id: 70, name: 'Ridge', place_id: 41, tour_type: 'hike', has_route: 1, tour_stage_key: null },
+      ],
+    });
+    await service.getTrip(7, 1, ['places']);
+    expect(gpxExport.stagesOf).not.toHaveBeenCalled();
   });
 });

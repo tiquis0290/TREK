@@ -200,6 +200,8 @@ export interface FitTourExport {
   sport: number;
   /** JSON `[[lat, lng]]` or `[[lat, lng, ele]]`, the tour's saved line. */
   route_geometry: string | null;
+  /** The file's serial number, telling this course from another written in the same second; 1 without. */
+  serial?: number;
 }
 
 /**
@@ -208,7 +210,7 @@ export interface FitTourExport {
  * the tour has no line of at least two points, as for the GPX.
  */
 export function buildTourFit(tour: FitTourExport, createdAt = new Date()): Buffer | null {
-  return encodeFitCourse(tour.name, tour.sport, parseGeometry(tour.route_geometry), createdAt);
+  return encodeFitCourse(tour.name, tour.sport, parseGeometry(tour.route_geometry), createdAt, tour.serial);
 }
 
 /** Filenames land on the receiving filesystem, so its reserved characters are

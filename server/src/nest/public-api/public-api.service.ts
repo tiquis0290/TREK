@@ -13,7 +13,7 @@ import type { TripsRepository } from '../../db/repositories/Trips.repository';
 import type { PublicApiTourColumns } from '../../db/repositories/place-public-api-rows';
 import { TripMembershipService } from '../trip-membership/trip-membership.service';
 import { endpointsByReservation, tourFieldsOf, transitLegsOf } from './public-api.helpers';
-import { TOUR_FILES, type TourFileSource } from './tour-files.interface';
+import { TOUR_FILES, type TourFileSource, type TourStageFacts } from './tour-files.interface';
 import { InjectRepository } from '@mikro-orm/nestjs';
 import { Inject, Injectable } from '@nestjs/common';
 import type {
@@ -175,11 +175,26 @@ export class PublicApiService {
    */
   private async placesByDay(tripId: number): Promise<Map<number, PublicApiPlace[]>> {
     const rows = await this.placesRepo.listAssignedForPublicApi(tripId);
+    const stages = await this.tourStagesOf(tripId, rows);
     return groupBy<PublicApiAssignedPlaceRow, PublicApiPlace>(
       rows,
       (r) => r.day_id,
-      (r) => toPlace(tripId, r),
+      (r) => toPlace(tripId, r, stages.get(r.place_id)?.find((stage) => stage.key === r.tour_stage_key) ?? null),
     );
+  }
+
+  /**
+   * MDT-02: the stages of the multi-day tours a day holds one stage of, so the
+   * day hands out that stage's files. Asked for only where a day names a stage;
+   * a stage the tour no longer has, or its line does not reach, leaves the day
+   * with the whole tour.
+   */
+  private async tourStagesOf(
+    tripId: number,
+    rows: readonly PublicApiAssignedPlaceRow[],
+  ): Promise<Map<number, TourStageFacts[]>> {
+    const staged = rows.filter((r) => r.tour_type && r.has_route && r.tour_stage_key).map((r) => r.place_id);
+    return staged.length > 0 ? this.tourFiles.stagesOf(tripId, staged) : new Map();
   }
 
   private async dayNotesByDay(tripId: number): Promise<Map<number, PublicApiDayNote[]>> {
@@ -274,15 +289,22 @@ export class PublicApiService {
    * The files Tours writes through the `TOUR_FILES` port (the GPX is the one the app downloads),
    * under the same access rule as `getTrip`: owner or member, decided in SQL. A
    * tour the trip does not hold is the export's own 404, and one without a line
-   * its 422.
+   * its 422. With a stage key (MDT-02), the file holds that stage alone, and a
+   * stage the tour does not have is the export's 404 too.
    */
-  async getTourFile(tripId: number, placeId: number, userId: number, format: 'gpx' | 'fit'): Promise<TourFile | null> {
+  async getTourFile(
+    tripId: number,
+    placeId: number,
+    userId: number,
+    format: 'gpx' | 'fit',
+    stageKey?: string,
+  ): Promise<TourFile | null> {
     if (!(await this.tripsRepo.findAccessible(tripId, userId))) return null;
     if (format === 'fit') {
-      const { fit, filename } = await this.tourFiles.exportFit(String(tripId), String(placeId));
+      const { fit, filename } = await this.tourFiles.exportFit(String(tripId), String(placeId), stageKey);
       return { body: fit, filename };
     }
-    const { gpx, filename } = await this.tourFiles.export(String(tripId), String(placeId));
+    const { gpx, filename } = await this.tourFiles.export(String(tripId), String(placeId), stageKey);
     return { body: gpx, filename };
   }
 
@@ -341,7 +363,11 @@ const DAY_SCOPED: PublicApiInclude[] = ['days', 'places', 'notes', 'reservations
  * a day and for unscheduled ones. Two copies would drift, and the second copy is
  * always the one that forgets a field.
  */
-function toPlace(tripId: number, row: Omit<PlaceRow, 'day_id'> & PublicApiTourColumns): PublicApiPlace {
+function toPlace(
+  tripId: number,
+  row: Omit<PlaceRow, 'day_id'> & PublicApiTourColumns,
+  stage: TourStageFacts | null = null,
+): PublicApiPlace {
   return {
     name: row.name,
     address: row.address ?? null,
@@ -353,7 +379,7 @@ function toPlace(tripId: number, row: Omit<PlaceRow, 'day_id'> & PublicApiTourCo
     category: row.category ?? null,
     notes: row.notes ?? null,
     transport_mode: row.transport_mode ?? null,
-    ...tourFieldsOf(tripId, row),
+    ...tourFieldsOf(tripId, row, stage),
   };
 }
 
@@ -362,6 +388,7 @@ function toReservation(
   row: Omit<ReservationRow, 'day_id'>,
   endpoints: Map<number, PublicApiReservationEndpoint[]>,
 ): PublicApiReservation {
+  const points = endpoints.get(row.id) ?? [];
   return {
     type: row.type ?? null,
     title: row.title ?? null,
@@ -370,8 +397,8 @@ function toReservation(
     end_time: row.reservation_end_time ?? null,
     status: row.status ?? null,
     notes: row.notes ?? null,
-    endpoints: endpoints.get(row.id) ?? [],
-    legs: transitLegsOf(row.metadata ?? null),
+    endpoints: points,
+    legs: transitLegsOf(row.metadata ?? null, points),
   };
 }
 

@@ -1,7 +1,6 @@
-import type { TourListItem, TourStageStop } from '@trek/shared'
+import { tourStageStretchOf, type TourListItem, type TourStageStop } from '@trek/shared'
 import { analyzeRouteGeometry } from '../../utils/routeGeometry'
 import type { Assignment, Place } from '../../types'
-import { vertexIndicesOf } from '../Tours/stages/tourStages'
 
 /** MDT-02: the stops each multi-day tour's stages run between, by the tour's place id. */
 export type TourStageStops = ReadonlyMap<number, readonly TourStageStop[]>
@@ -21,11 +20,8 @@ function stageStretch(
   stops: readonly TourStageStop[] | undefined,
   stageKey: string | null | undefined,
 ): [number, number][] | null {
-  if (!stageKey || !stops || line.length < 2) return null
-  const index = stops.findIndex(stop => stop.key === stageKey)
-  if (index < 0 || index >= stops.length - 1) return null
-  const at = vertexIndicesOf(stops, line)
-  return at[index + 1] > at[index] ? line.slice(at[index], at[index + 1] + 1) : null
+  const stretch = stops ? tourStageStretchOf(stops, line, stageKey) : null
+  return stretch ? line.slice(stretch.from, stretch.to + 1) : null
 }
 
 export type DayItineraryItem =

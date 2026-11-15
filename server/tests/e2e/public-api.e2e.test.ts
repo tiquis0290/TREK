@@ -32,7 +32,7 @@ import { makeCategory } from '../helpers/factories/places';
 import { makeReservation, makeReservationEndpoint } from '../helpers/factories/reservations';
 import { findRow, insertRow } from '../helpers/factories/rows';
 import { makeMcpToken } from '../helpers/factories/tokens';
-import { makeTour } from '../helpers/factories/tours';
+import { addTourWaypoints, makeTour } from '../helpers/factories/tours';
 import { addTripMember } from '../helpers/factories/trips';
 import { makeUser } from '../helpers/factories/users';
 import { createTestMikroOrmModule, createTestOrm, type TestOrm } from '../helpers/test-orm';
@@ -86,6 +86,9 @@ const TRIPS_PLACES_TOKEN = 'trek_' + '1'.repeat(48);
 const BROKEN_SCOPES_TOKEN = 'trek_' + 'f'.repeat(48);
 
 /** A hike's line as `places.route_geometry` stores it: `[lat, lng, height]` points. */
+/** MDT-02: a two-day hut tour, five points along a meridian, its first stage ending at the hut halfway. */
+const HUT_TOUR = JSON.stringify([0, 1, 2, 3, 4].map((step) => [47.5 + step * 0.01, 11.2, 1500 + step * 100]));
+
 const RIDGE = JSON.stringify([
   [47.42, 10.98, 1210],
   [47.43, 10.99, 1380],
@@ -309,6 +312,25 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
     await insertRow(orm, DayAssignments, { day: 30, place: 30, order_index: 0 });
     await insertRow(orm, Places, { id: 31, trip: 3, name: 'Food walk', lat: 47.4, lng: 10.9 });
     await makeTour(orm, 31, { tourTypeRef: 'food' });
+    // MDT-02: a two-day tour on days two and three of trip 3, one stage a day.
+    await insertRow(orm, Days, { id: 31, trip: 3, day_number: 2, date: '2026-08-02' });
+    await insertRow(orm, Days, { id: 32, trip: 3, day_number: 3, date: '2026-08-03' });
+    await insertRow(orm, Places, {
+      id: 33,
+      trip: 3,
+      name: 'Huettentour',
+      lat: 47.5,
+      lng: 11.2,
+      route_geometry: HUT_TOUR,
+    });
+    await makeTour(orm, 33, { distance: 4.4 });
+    await addTourWaypoints(orm, 33, [
+      { lat: 47.5, lng: 11.2, station_key: 'valley' },
+      { lat: 47.52, lng: 11.2, station_key: 'hut', stage_end: 1 },
+      { lat: 47.54, lng: 11.2, station_key: 'summit' },
+    ]);
+    await insertRow(orm, DayAssignments, { day: 31, place: 33, order_index: 0, tour_stage_key: 'valley' });
+    await insertRow(orm, DayAssignments, { day: 32, place: 33, order_index: 0, tour_stage_key: 'hut' });
     // Bob's own trip holds a tour Ada must not be able to fetch.
     await insertRow(orm, Places, { id: 32, trip: 2, name: 'Bobs Runde', lat: 1, lng: 2, route_geometry: RIDGE });
     await makeTour(orm, 32);
@@ -871,6 +893,73 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
       expect(allowedFit.status).toBe(200);
     });
 
+    it('PUBAPI-TOUR-007: MDT-02 each day of a multi-day tour hands out its own stage, its links and length', async () => {
+      const res = await get('/api/v1/trips/3?include=places', ADA_TOKEN);
+      expect(res.status).toBe(200);
+      const [, second, third] = res.body.days;
+      expect(second.places).toEqual([
+        expect.objectContaining({
+          name: 'Huettentour',
+          gpx_url: '/api/v1/trips/3/tours/33/gpx?stage=valley',
+          fit_url: '/api/v1/trips/3/tours/33/fit?stage=valley',
+          tour_type: 'hike',
+          tour_stage: { number: 1, count: 2 },
+        }),
+      ]);
+      expect(third.places[0]).toMatchObject({
+        fit_url: '/api/v1/trips/3/tours/33/fit?stage=hut',
+        tour_stage: { number: 2, count: 2 },
+      });
+      // Two hundredths of a degree of latitude a stage, not the 4.4 km of the whole tour.
+      expect(second.places[0].distance_m).toBeGreaterThan(2200);
+      expect(second.places[0].distance_m).toBeLessThan(2240);
+      expect(res.body.days[0].places[0].tour_stage).toBeNull();
+    });
+
+    it('PUBAPI-TOUR-008: MDT-02 a stage link serves that stage alone, as GPX and as FIT', async () => {
+      const gpx = await get('/api/v1/trips/3/tours/33/gpx?stage=hut', ADA_TOKEN)
+        .buffer(true)
+        .parse((response, done) => {
+          let text = '';
+          response.setEncoding('utf8');
+          response.on('data', (chunk: string) => (text += chunk));
+          response.on('end', () => done(null, text));
+        });
+      expect(gpx.status).toBe(200);
+      expect(gpx.headers['content-disposition']).toMatch(/Huettentour-2-2\.gpx/);
+      const text = String(gpx.body);
+      expect(text).toContain('2/2 Huettentour');
+      expect(text.match(/<trkpt /g)).toHaveLength(3);
+      expect(text).toContain('lat="47.52"');
+      expect(text).not.toContain('lat="47.51"');
+
+      const fit = await get('/api/v1/trips/3/tours/33/fit?stage=valley', ADA_TOKEN)
+        .buffer(true)
+        .parse((response, done) => {
+          const chunks: Buffer[] = [];
+          response.on('data', (chunk: Buffer) => chunks.push(chunk));
+          response.on('end', () => done(null, Buffer.concat(chunks)));
+        });
+      expect(fit.status).toBe(200);
+      expect(fitCrc(fit.body as Buffer)).toBe(0);
+      expect((fit.body as Buffer).includes(Buffer.from('1/2 Huettentour\0'))).toBe(true);
+    });
+
+    it('PUBAPI-TOUR-009: MDT-02 a stage the tour does not have is a 404, an empty one a 400', async () => {
+      const [unknown, lastStop, dayTour, empty] = await getEach(
+        ['/api/v1/trips/3/tours/33/fit?stage=nowhere', ADA_TOKEN],
+        ['/api/v1/trips/3/tours/33/gpx?stage=summit', ADA_TOKEN],
+        ['/api/v1/trips/3/tours/30/fit?stage=valley', ADA_TOKEN],
+        ['/api/v1/trips/3/tours/33/fit?stage=', ADA_TOKEN],
+      );
+      for (const res of [unknown, lastStop, dayTour]) {
+        expect(res.status).toBe(404);
+        expect(res.body).toEqual({ error: 'Tour stage not found' });
+      }
+      expect(empty.status).toBe(400);
+      expect(empty.body).toEqual({ error: 'Invalid tour stage' });
+    });
+
     it('PUBAPI-TRANSIT-001: a journey carries its points in order and its legs without lines or colours', async () => {
       const res = await get('/api/v1/trips/3?include=reservations', ADA_TOKEN);
       expect(res.status).toBe(200);
@@ -889,10 +978,32 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
         agency: 'České dráhy',
         duration_s: 8880,
         stops: 2,
-        from: { name: 'Brno hl.n.', time: '08:28', track: '3' },
-        to: { name: 'Praha hl.n.', time: '10:56', track: '5' },
+        from: { name: 'Brno hl.n.', time: '08:28', track: '3', lat: 3.85, lng: -12.02 },
+        to: { name: 'Praha hl.n.', time: '10:56', track: '5', lat: 3.85, lng: -12.02 },
       });
       expect(JSON.stringify(journey)).not.toMatch(/geometry|line_color|provider/);
+    });
+
+    it('PUBAPI-TRANSIT-003: every leg end is placed, from its line or, for a walk without one, its neighbours', async () => {
+      // The fixture's legs store no place, as journeys saved before places were
+      // stored with them. Each line here decodes to a single point: the tram's to
+      // 49.11096 N 16.09024 E, the train's (read at its precision 6) to 3.85 N 12.02 W.
+      const res = await get('/api/v1/trips/3?include=reservations', ADA_TOKEN);
+      const [journey] = res.body.days[0].reservations;
+      const place = (end: { lat: number | null; lng: number | null }) => [end.lat, end.lng];
+      const tram = [49.11096, 16.09024];
+      const train = [3.85, -12.02];
+      expect(
+        journey.legs.map((leg: { from: { lat: number; lng: number }; to: { lat: number; lng: number } }) => [
+          place(leg.from),
+          place(leg.to),
+        ]),
+      ).toEqual([
+        [tram, tram],
+        // The walk has no line: it starts where the tram ends and ends where the train starts.
+        [tram, train],
+        [train, train],
+      ]);
     });
 
     it('PUBAPI-TRANSIT-002: a booking that is no journey has empty endpoints and legs', async () => {

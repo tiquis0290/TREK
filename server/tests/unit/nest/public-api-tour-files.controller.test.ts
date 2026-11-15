@@ -5,8 +5,8 @@
  * and bike computers, FIT for a Garmin watch, which takes a downloaded course
  * in no other form. What they decide on their own is pinned here, for both: the
  * scopes they need, how the two ids are parsed, that an unreadable trip answers
- * like any other trip read, and that a tour without a line is refused with a
- * code an integration can branch on. The SQL behind them is the e2e suite's.
+ * like any other trip read, that a tour without a line is refused with a
+ * code an integration can branch on, and how a stage is asked for (MDT-02). The SQL behind them is the e2e suite's.
  */
 import { DomainError } from '../../../src/nest/common/domain-error';
 import type { RateLimitService } from '../../../src/nest/common/rate-limit.service';
@@ -58,8 +58,8 @@ describe.each<Format>(['gpx', 'fit'])('PublicApiController GET /api/v1/trips/:id
   it('PUBAPI-TOURFILE-001: sends the export as a download, for the caller the guard resolved', async () => {
     const getTourFile = vi.fn().mockResolvedValue(FILES[format]);
     const { res, typed } = makeRes();
-    await route(makeController(getTourFile), format)(req(), '12', '41', typed);
-    expect(getTourFile).toHaveBeenCalledWith(12, 41, 7, format);
+    await route(makeController(getTourFile), format)(req(), '12', '41', undefined, typed);
+    expect(getTourFile).toHaveBeenCalledWith(12, 41, 7, format, undefined);
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', FILES[format].contentType);
     expect(res.setHeader).toHaveBeenCalledWith(
       'Content-Disposition',
@@ -71,7 +71,7 @@ describe.each<Format>(['gpx', 'fit'])('PublicApiController GET /api/v1/trips/:id
   it('PUBAPI-TOURFILE-002: a trip the caller may not read is the same 404 as for the trip itself', async () => {
     const { res, typed } = makeRes();
     const send = route(makeController(vi.fn().mockResolvedValue(null)), format);
-    expect(await refusal(() => send(req(), '12', '41', typed))).toEqual({
+    expect(await refusal(() => send(req(), '12', '41', undefined, typed))).toEqual({
       status: 404,
       body: { error: 'Trip not found' },
     });
@@ -81,7 +81,7 @@ describe.each<Format>(['gpx', 'fit'])('PublicApiController GET /api/v1/trips/:id
   it('PUBAPI-TOURFILE-003: a tour without a line is a 422 carrying tour_without_route', async () => {
     const noRoute = new DomainError(422, 'This tour has no route to export', { code: 'tour_without_route' });
     const send = route(makeController(vi.fn().mockRejectedValue(noRoute)), format);
-    expect(await refusal(() => send(req(), '12', '41', makeRes().typed))).toEqual({
+    expect(await refusal(() => send(req(), '12', '41', undefined, makeRes().typed))).toEqual({
       status: 422,
       body: { error: 'This tour has no route to export', code: 'tour_without_route' },
     });
@@ -90,7 +90,7 @@ describe.each<Format>(['gpx', 'fit'])('PublicApiController GET /api/v1/trips/:id
   it('PUBAPI-TOURFILE-004: a tour the trip does not hold passes on as the export’s 404', async () => {
     const missing = new NotFoundException('Tour not found');
     const send = route(makeController(vi.fn().mockRejectedValue(missing)), format);
-    await expect(send(req(), '12', '99', makeRes().typed)).rejects.toBe(missing);
+    await expect(send(req(), '12', '99', undefined, makeRes().typed)).rejects.toBe(missing);
   });
 
   it.each(['abc', '0', '4x', '-3'])(
@@ -98,7 +98,7 @@ describe.each<Format>(['gpx', 'fit'])('PublicApiController GET /api/v1/trips/:id
     async (ref) => {
       const getTourFile = vi.fn();
       const send = route(makeController(getTourFile), format);
-      expect(await refusal(() => send(req(), '12', ref, makeRes().typed))).toEqual({
+      expect(await refusal(() => send(req(), '12', ref, undefined, makeRes().typed))).toEqual({
         status: 400,
         body: { error: 'Invalid tour reference' },
       });
@@ -109,7 +109,7 @@ describe.each<Format>(['gpx', 'fit'])('PublicApiController GET /api/v1/trips/:id
   it('PUBAPI-TOURFILE-006: a malformed trip id is refused like on every other trip route', async () => {
     const getTourFile = vi.fn();
     const send = route(makeController(getTourFile), format);
-    expect(await refusal(() => send(req(), '12abc', '41', makeRes().typed))).toEqual({
+    expect(await refusal(() => send(req(), '12abc', '41', undefined, makeRes().typed))).toEqual({
       status: 400,
       body: { error: 'Invalid trip id' },
     });
@@ -122,9 +122,29 @@ describe.each<Format>(['gpx', 'fit'])('PublicApiController GET /api/v1/trips/:id
   ])('PUBAPI-TOURFILE-007: a key without %s is refused with a 403 naming it', async (missing, scopes) => {
     const getTourFile = vi.fn();
     const send = route(makeController(getTourFile), format);
-    const { status, body } = await refusal(() => send(req(scopes), '12', '41', makeRes().typed));
+    const { status, body } = await refusal(() => send(req(scopes), '12', '41', undefined, makeRes().typed));
     expect(status).toBe(403);
     expect(body).toMatchObject({ code: 'API_SCOPE_FORBIDDEN', required_scope: missing });
+    expect(getTourFile).not.toHaveBeenCalled();
+  });
+
+  it('PUBAPI-TOURFILE-008: MDT-02 passes the stage asked for on, to cut the file to it', async () => {
+    const getTourFile = vi.fn().mockResolvedValue(FILES[format]);
+    await route(makeController(getTourFile), format)(req(), '12', '41', 'hut-2', makeRes().typed);
+    expect(getTourFile).toHaveBeenCalledWith(12, 41, 7, format, 'hut-2');
+  });
+
+  it.each<[string, unknown]>([
+    ['empty', ''],
+    ['given twice', ['a', 'b']],
+    ['too long', 'x'.repeat(201)],
+  ])('PUBAPI-TOURFILE-009: MDT-02 refuses a stage that is %s before any read', async (_, stage) => {
+    const getTourFile = vi.fn();
+    const send = route(makeController(getTourFile), format);
+    expect(await refusal(() => send(req(), '12', '41', stage, makeRes().typed))).toEqual({
+      status: 400,
+      body: { error: 'Invalid tour stage' },
+    });
     expect(getTourFile).not.toHaveBeenCalled();
   });
 });

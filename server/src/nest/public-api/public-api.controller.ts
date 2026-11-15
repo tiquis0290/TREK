@@ -126,7 +126,9 @@ export class PublicApiController {
    * with the `places` scope, because a tour is a place, and the `trips` scope
    * every trip read needs. A trip the caller may not read answers 404 exactly
    * like `GET /trips/:id`, a tour the trip does not hold 404 as well, and a tour
-   * with no line 422 with `code: tour_without_route`.
+   * with no line 422 with `code: tour_without_route`. A day's `gpx_url` for one
+   * stage of a multi-day tour carries `?stage=` (MDT-02): the file is then that
+   * stage's stretch alone, and a stage the tour does not have is a 404.
    *
    * response-contract-exempt: a file download written through @Res(), not a JSON body.
    */
@@ -135,9 +137,10 @@ export class PublicApiController {
     @Req() req: Request,
     @Param('id') id: string,
     @Param('tourRef') tourRef: string,
+    @Query('stage') stage: unknown,
     @Res() res: Response,
   ): Promise<void> {
-    await this.sendTourFile(req, id, tourRef, res, 'gpx');
+    await this.sendTourFile(req, id, tourRef, stage, res, 'gpx');
   }
 
   /**
@@ -153,9 +156,10 @@ export class PublicApiController {
     @Req() req: Request,
     @Param('id') id: string,
     @Param('tourRef') tourRef: string,
+    @Query('stage') stage: unknown,
     @Res() res: Response,
   ): Promise<void> {
-    await this.sendTourFile(req, id, tourRef, res, 'fit');
+    await this.sendTourFile(req, id, tourRef, stage, res, 'fit');
   }
 
   /** What both tour file routes do, so the two cannot drift apart in who may read what. */
@@ -163,6 +167,7 @@ export class PublicApiController {
     req: Request,
     id: string,
     tourRef: string,
+    stage: unknown,
     res: Response,
     format: keyof typeof TOUR_FILE_TYPES,
   ): Promise<void> {
@@ -171,10 +176,13 @@ export class PublicApiController {
     requireScope(req, 'places');
     const tripId = parseTripId(id);
     const placeId = parsePositiveId(tourRef, 'Invalid tour reference');
+    const stageKey = parseStageKey(stage);
 
-    const file = await this.api.getTourFile(tripId, placeId, requireUserId(req), format).catch((err: unknown) => {
-      throw publicTourFileError(err);
-    });
+    const file = await this.api
+      .getTourFile(tripId, placeId, requireUserId(req), format, stageKey)
+      .catch((err: unknown) => {
+        throw publicTourFileError(err);
+      });
     if (!file) {
       throw new HttpException({ error: 'Trip not found' }, 404);
     }
@@ -204,6 +212,19 @@ function publicTourFileError(err: unknown): unknown {
  */
 function parseTripId(raw: string): number {
   return parsePositiveId(raw, 'Invalid trip id');
+}
+
+/**
+ * MDT-02: `?stage=` on a tour file route, the key of the stop a stage starts
+ * at; absent for the whole tour. Given more than once, or empty, it is a 400
+ * rather than a guess at which stage was meant.
+ */
+function parseStageKey(raw: unknown): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string' || raw === '' || raw.length > 200) {
+    throw new HttpException({ error: 'Invalid tour stage' }, 400);
+  }
+  return raw;
 }
 
 /** A positive integer path segment, or a 400 with `error` as the message. */

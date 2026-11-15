@@ -54,8 +54,19 @@ export const publicApiPlaceSchema = z.object({
    * place that is no tour.
    */
   tour_type: z.string().nullable(),
-  /** The tour's length in whole metres, null when TREK does not know it or the place is no tour. */
+  /**
+   * The tour's length in whole metres, null when TREK does not know it or the
+   * place is no tour. For a day that holds one stage of a multi-day tour, the
+   * length of that stage.
+   */
   distance_m: z.number().int().nonnegative().nullable(),
+  /**
+   * MDT-02: which stage of a multi-day tour the day holds, `number` counted
+   * from 1 of `count`. `gpx_url` and `fit_url` then serve that stage's stretch
+   * of the route alone. Null for a place that is no tour, a day tour, and a day
+   * that holds the whole of a multi-day tour.
+   */
+  tour_stage: z.object({ number: z.number().int().positive(), count: z.number().int().min(2) }).nullable(),
 });
 export type PublicApiPlace = z.infer<typeof publicApiPlaceSchema>;
 
@@ -88,11 +99,18 @@ export const publicApiReservationEndpointSchema = z.object({
 });
 export type PublicApiReservationEndpoint = z.infer<typeof publicApiReservationEndpointSchema>;
 
-/** Where a transit leg starts or ends: the stop, the local `HH:MM` and the track or platform. */
+/**
+ * Where a transit leg starts or ends: the stop, the local `HH:MM`, the track or
+ * platform, and where the stop is. Every change has two of these, getting off one
+ * ride and boarding the next, so a reader can guide the traveller between them.
+ * `lat`/`lng` are null when TREK cannot place the stop.
+ */
 export const publicApiTransitLegStopSchema = z.object({
   name: z.string().nullable(),
   time: z.string().nullable(),
   track: z.string().nullable(),
+  lat: z.number().min(-90).max(90).nullable(),
+  lng: z.number().min(-180).max(180).nullable(),
 });
 export type PublicApiTransitLegStop = z.infer<typeof publicApiTransitLegStopSchema>;
 

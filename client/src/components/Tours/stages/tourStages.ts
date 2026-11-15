@@ -3,6 +3,7 @@ import {
   MAX_PLANNED_TOUR_DURATION_MINUTES,
   MAX_TOUR_STAGES,
   runMinutesAtPace,
+  vertexIndicesOf,
   type PlannableTourType,
 } from '@trek/shared';
 import { analyzeRouteGeometry } from '../../../utils/routeGeometry';
@@ -141,43 +142,6 @@ export interface TourStageInputs {
   paddle: PaddleStageInputs | null;
   /** A run's pace in seconds per kilometre (RUN-01); null without one, and ignored for any other type. */
   runPaceSecondsPerKm: number | null;
-}
-
-const METRES_PER_DEGREE = 111_320;
-/**
- * How much farther than the nearest spot of the line a point may lie and
- * still be placed at an earlier pass: a route that comes by a point twice (out
- * and back) places it where it gets there first.
- */
-const PASS_TOLERANCE_M = 30;
-
-function metresFrom(vertex: readonly number[], lat: number, lng: number): number {
-  const x = ((vertex[1] ?? 0) - lng) * Math.cos((lat * Math.PI) / 180);
-  const y = (vertex[0] ?? 0) - lat;
-  return Math.hypot(x, y) * METRES_PER_DEGREE;
-}
-
-/** The vertex of the line each point lies at, searching on from where the one before lay. */
-export function vertexIndicesOf(
-  points: ReadonlyArray<{ lat: number; lng: number }>,
-  line: ReadonlyArray<readonly number[]>
-): number[] {
-  const indices: number[] = [];
-  let from = 0;
-  for (const point of points) {
-    let nearest = Infinity;
-    for (let i = from; i < line.length; i++) nearest = Math.min(nearest, metresFrom(line[i], point.lat, point.lng));
-    let index = from;
-    for (let i = from; i < line.length; i++) {
-      if (metresFrom(line[i], point.lat, point.lng) <= nearest + PASS_TOLERANCE_M) {
-        index = i;
-        break;
-      }
-    }
-    indices.push(index);
-    from = index;
-  }
-  return indices;
 }
 
 interface Stretch {

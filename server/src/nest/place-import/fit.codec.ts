@@ -43,7 +43,7 @@ export interface FitPoint {
   ele: number | null;
 }
 
-type FieldType = 'enum' | 'uint16' | 'sint32' | 'uint32' | 'string32';
+type FieldType = 'enum' | 'uint16' | 'sint32' | 'uint32' | 'uint32z' | 'string32';
 
 /** Each field type's size in bytes and its FIT base type. */
 const FIELD_TYPES: Record<FieldType, { size: number; base: number }> = {
@@ -51,6 +51,7 @@ const FIELD_TYPES: Record<FieldType, { size: number; base: number }> = {
   uint16: { size: 2, base: 0x84 },
   sint32: { size: 4, base: 0x85 },
   uint32: { size: 4, base: 0x86 },
+  uint32z: { size: 4, base: 0x8c },
   string32: { size: 32, base: 0x07 },
 };
 
@@ -68,6 +69,7 @@ const FILE_ID: MessageDef = {
     [0, 'enum'], // type
     [1, 'uint16'], // manufacturer
     [2, 'uint16'], // product
+    [3, 'uint32z'], // serial_number
     [4, 'uint32'], // time_created
   ],
 };
@@ -198,12 +200,18 @@ function data(def: MessageDef, values: ReadonlyArray<number | Buffer>): Buffer {
  * The points as a FIT course named `name` for `sport` (the FIT profile's
  * sport enum), created at `createdAt`. Null under two points: a course
  * needs a line.
+ *
+ * `serial` is the file's serial number. A watch knows a file by its
+ * `file_id`, so two courses written in the same second (the stages of one
+ * tour, fetched one after another) would be one file to it without a serial
+ * of their own, the later replacing the earlier. Not 0, which FIT reads as none.
  */
 export function encodeFitCourse(
   name: string,
   sport: number,
   points: readonly FitPoint[],
   createdAt: Date,
+  serial = 1,
 ): Buffer | null {
   if (points.length < 2) return null;
   const t0 = Math.floor(createdAt.getTime() / 1000) - FIT_EPOCH_OFFSET_S;
@@ -216,7 +224,7 @@ export function encodeFitCourse(
 
   const body = Buffer.concat([
     definition(FILE_ID),
-    data(FILE_ID, [FILE_TYPE_COURSE, MANUFACTURER_DEVELOPMENT, 1, t0]),
+    data(FILE_ID, [FILE_TYPE_COURSE, MANUFACTURER_DEVELOPMENT, 1, serial >>> 0 || 1, t0]),
     definition(COURSE),
     data(COURSE, [nameField(name), sport]),
     definition(LAP),

@@ -3,6 +3,7 @@ import type { PublicApiTourColumns } from '../../db/repositories/place-public-ap
 import type { PublicApiEndpointRow } from '../../db/repositories/reservation-public-api-rows';
 import { decodeJson } from '../../utils/json-column';
 import { decodePolyline } from '../../utils/polyline';
+import type { TourStageFacts } from './tour-files.interface';
 import type {
   PublicApiPlace,
   PublicApiReservationEndpoint,
@@ -18,27 +19,44 @@ import { z } from 'zod';
  * a test that does not need a database.
  */
 
-/** Where an integration fetches a tour's route as a file. A path on this instance, resolved against the caller's base URL. */
-function tourFilePath(tripId: number, placeId: number, format: 'gpx' | 'fit'): string {
-  return `/api/v1/trips/${tripId}/tours/${placeId}/${format}`;
+/**
+ * Where an integration fetches a tour's route as a file. A path on this instance, resolved against the caller's base URL;
+ * a stage of a multi-day tour (MDT-02) is asked for by the key of the stop it starts at.
+ */
+function tourFilePath(tripId: number, placeId: number, format: 'gpx' | 'fit', stageKey?: string): string {
+  const path = `/api/v1/trips/${tripId}/tours/${placeId}/${format}`;
+  return stageKey === undefined ? path : `${path}?stage=${encodeURIComponent(stageKey)}`;
 }
 
 /**
  * A place's tour fields. A place without a tour row has none of them; a tour
  * without a line of its own has no file links, because the file routes would
- * only refuse it. The length is stored in kilometres and goes out in whole metres.
+ * only refuse it. The length is stored in kilometres and goes out in whole
+ * metres. On a day that holds one stage of a multi-day tour (MDT-02), the links
+ * serve that stage and the length is the stage's.
  */
 export function tourFieldsOf(
   tripId: number,
   row: PublicApiTourColumns,
-): Pick<PublicApiPlace, 'gpx_url' | 'fit_url' | 'tour_type' | 'distance_m'> {
-  if (!row.tour_type) return { gpx_url: null, fit_url: null, tour_type: null, distance_m: null };
+  stage: TourStageFacts | null = null,
+): Pick<PublicApiPlace, 'gpx_url' | 'fit_url' | 'tour_type' | 'distance_m' | 'tour_stage'> {
+  if (!row.tour_type) return { gpx_url: null, fit_url: null, tour_type: null, distance_m: null, tour_stage: null };
+  if (stage && row.has_route) {
+    return {
+      gpx_url: tourFilePath(tripId, row.place_id, 'gpx', stage.key),
+      fit_url: tourFilePath(tripId, row.place_id, 'fit', stage.key),
+      tour_type: row.tour_type,
+      distance_m: stage.distance_m,
+      tour_stage: { number: stage.number, count: stage.count },
+    };
+  }
   const km = row.tour_distance_km;
   return {
     gpx_url: row.has_route ? tourFilePath(tripId, row.place_id, 'gpx') : null,
     fit_url: row.has_route ? tourFilePath(tripId, row.place_id, 'fit') : null,
     tour_type: row.tour_type,
     distance_m: typeof km === 'number' && Number.isFinite(km) && km >= 0 ? Math.round(km * 1000) : null,
+    tour_stage: null,
   };
 }
 

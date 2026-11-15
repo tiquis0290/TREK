@@ -143,7 +143,8 @@ curl -H "Authorization: Bearer trek_…" \
           "category": "Museum",
           "notes": null,
           "transport_mode": "walking",
-          "gpx_url": null, "fit_url": null, "tour_type": null, "distance_m": null
+          "gpx_url": null, "fit_url": null, "tour_type": null, "distance_m": null,
+          "tour_stage": null
         },
         {
           "name": "Ridge walk to Fiesole",
@@ -157,7 +158,8 @@ curl -H "Authorization: Bearer trek_…" \
           "gpx_url": "/api/v1/trips/12/tours/41/gpx",
           "fit_url": "/api/v1/trips/12/tours/41/fit",
           "tour_type": "hike",
-          "distance_m": 12346
+          "distance_m": 12346,
+          "tour_stage": null
         }
       ],
       "day_notes": [{ "text": "Bring the tickets", "time": "09:00" }],
@@ -186,14 +188,17 @@ curl -H "Authorization: Bearer trek_…" \
 
 #### Tours
 
-A tour (a hike, a run, a ride, a ski or paddle route, a city walk) is a place like any other, at its starting point, with four more fields. They are `null` on every place that is no tour.
+A tour (a hike, a run, a ride, a ski or paddle route, a city walk) is a place like any other, at its starting point, with five more fields. They are `null` on every place that is no tour.
 
 | Field | What it is |
 |---|---|
 | `gpx_url` | where its route is served as a GPX file (see below), or `null` when the tour has no route of its own |
 | `fit_url` | where the same route is served as a FIT course (see below); `null` exactly when `gpx_url` is |
 | `tour_type` | the tour's type as TREK names it: `hike`, `run`, `bike`, `walk` (a city walk), `ski`, `kayak` (any paddle tour), `horse`, `food` … Passed through unmapped, like a booking's `type`, so expect values you have not seen |
-| `distance_m` | its length in whole metres, or `null` when TREK does not know it |
+| `distance_m` | its length in whole metres, or `null` when TREK does not know it; for one stage of a multi-day tour, the stage's length |
+| `tour_stage` | for a day that holds one stage of a multi-day tour, which one: `{ "number": 2, "count": 3 }`, counted from 1. `null` for a day tour and for a day that holds the whole tour |
+
+A multi-day tour is one route split into stages, one a day, each ending at a stop marked as the end of the day. A day that holds one stage lists the tour with that stage's links: they carry `?stage=…`, and the file they serve is that stage's stretch of the route alone, from the stop it starts at to the stop the next stage starts at. Its name starts with the stage (`2/3 Hut to hut`), so the stages of one tour stay apart on a watch that shortens a course's name. A stage the route does not reach yet, or one the tour no longer has, is listed as the whole tour instead.
 
 `gpx_url` and `fit_url` are paths on your TREK instance. Resolve them against the base URL you already call the API at, and send the same key. Follow them rather than building them yourself: the reference in them is opaque, and the place carries no id you could build it from.
 
@@ -226,7 +231,7 @@ curl -H "Authorization: Bearer trek_…" -o ridge.gpx \
      "https://trek.example.com/api/v1/trips/12/tours/41/gpx"
 ```
 
-It answers `Content-Type: application/gpx+xml`. It needs the `places` scope as well as `trips`, since a tour is a place, and counts against the same rate limit as every other call. A trip you may not read is a `404`, exactly as for the trip itself; so is a tour the trip does not hold. A tour without a route answers `422` with `code: "tour_without_route"`.
+It answers `Content-Type: application/gpx+xml`. It needs the `places` scope as well as `trips`, since a tour is a place, and counts against the same rate limit as every other call. A trip you may not read is a `404`, exactly as for the trip itself; so is a tour the trip does not hold. A tour without a route answers `422` with `code: "tour_without_route"`. With `?stage=` (as a day's `gpx_url` for one stage of a multi-day tour carries it), the file holds that stage alone, its name starting with the stage; a stage the tour does not have is a `404` (`Tour stage not found`), and an empty `stage` a `400`.
 
 ### `GET /api/v1/trips/{id}/tours/{tourRef}/fit`
 

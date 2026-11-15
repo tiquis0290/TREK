@@ -6,6 +6,9 @@ import {
   tourStageIssues,
   tourStageKeysOf,
   tourStageStopsOf,
+  tourStageStretchesOf,
+  tourStageStretchOf,
+  vertexIndicesOf,
 } from './tour-stages';
 import {
   MAX_PLANNED_TOUR_DURATION_MINUTES,
@@ -195,5 +198,44 @@ describe('MDT-01 tour stages', () => {
     expect(tourListItemSchema.safeParse({ ...item, stage_stops: [{ ...stops[0], key: '' }, stops[1]] }).success).toBe(
       false,
     );
+  });
+});
+
+describe('MDT-02 stage stretches', () => {
+  const stops = [
+    { key: 'a', lat: 47, lng: 11 },
+    { key: 'c', lat: 47.02, lng: 11 },
+    { key: 'e', lat: 47.04, lng: 11 },
+  ];
+  const line = [0, 1, 2, 3, 4].map((step) => [47 + step * 0.01, 11, 1000]);
+
+  it('MDT-SH-012: cuts each stage from the stop it starts at to the stop the next one starts at', () => {
+    expect(tourStageStretchesOf(stops, line)).toEqual([
+      { index: 0, from: 0, to: 2 },
+      { index: 1, from: 2, to: 4 },
+    ]);
+    expect(tourStageStretchOf(stops, line, 'c')).toEqual({ index: 1, from: 2, to: 4 });
+  });
+
+  it('MDT-SH-013: has no stretch for the last stop, an unknown key, no key, a day tour or a short line', () => {
+    expect(tourStageStretchOf(stops, line, 'e')).toBeNull();
+    expect(tourStageStretchOf(stops, line, 'gone')).toBeNull();
+    expect(tourStageStretchOf(stops, line, null)).toBeNull();
+    expect(tourStageStretchesOf(stops.slice(0, 1), line)).toEqual([]);
+    expect(tourStageStretchesOf(stops, line.slice(0, 1))).toEqual([]);
+  });
+
+  it('MDT-SH-014: leaves out a stage the line does not reach, and places a stop at the first pass', () => {
+    const short = line.slice(0, 3);
+    expect(tourStageStretchesOf(stops, short)).toEqual([{ index: 0, from: 0, to: 2 }, null]);
+    const outAndBack = [
+      [48, 11],
+      [48.01, 11],
+      [48.02, 11],
+      [48.01, 11],
+      [48, 11],
+    ];
+    const there = [{ lat: 48 }, { lat: 48.01 }, { lat: 48.02 }, { lat: 48 }].map((p) => ({ ...p, lng: 11 }));
+    expect(vertexIndicesOf(there, outAndBack)).toEqual([0, 1, 2, 4]);
   });
 });

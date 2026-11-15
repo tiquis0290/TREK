@@ -49,17 +49,34 @@ describe('public API v1 tour fields', () => {
       fit_url: '/api/v1/trips/3/tours/30/fit',
       tour_type: 'hike',
       distance_m: 12346,
+      tour_stage: null,
     };
     expect(publicApiPlaceSchema.parse(tour)).toEqual(tour);
   });
 
-  it('describes a plain place with all four tour fields null', () => {
-    const plain = { ...PLACE, gpx_url: null, fit_url: null, tour_type: null, distance_m: null };
+  it('MDT-02: names the stage of a multi-day tour a day holds, of at least two', () => {
+    const stage = {
+      ...PLACE,
+      gpx_url: '/api/v1/trips/3/tours/30/gpx?stage=hut',
+      fit_url: '/api/v1/trips/3/tours/30/fit?stage=hut',
+      tour_type: 'hike',
+      distance_m: 6100,
+      tour_stage: { number: 2, count: 3 },
+    };
+    expect(publicApiPlaceSchema.parse(stage)).toEqual(stage);
+    const at = (tour_stage: unknown) => publicApiPlaceSchema.safeParse({ ...stage, tour_stage }).success;
+    expect(at({ number: 0, count: 3 })).toBe(false);
+    expect(at({ number: 1, count: 1 })).toBe(false);
+    expect(at(undefined)).toBe(false);
+  });
+
+  it('describes a plain place with all five tour fields null', () => {
+    const plain = { ...PLACE, gpx_url: null, fit_url: null, tour_type: null, distance_m: null, tour_stage: null };
     expect(publicApiPlaceSchema.safeParse(plain).success).toBe(true);
   });
 
   it('holds fit_url as part of the contract, next to gpx_url', () => {
-    const withoutFit = { ...PLACE, gpx_url: null, tour_type: null, distance_m: null };
+    const withoutFit = { ...PLACE, gpx_url: null, tour_type: null, distance_m: null, tour_stage: null };
     expect(publicApiPlaceSchema.safeParse(withoutFit).success).toBe(false);
   });
 
@@ -69,7 +86,14 @@ describe('public API v1 tour fields', () => {
 
   it('takes the length in whole, non-negative metres', () => {
     const at = (distance_m: number) =>
-      publicApiPlaceSchema.safeParse({ ...PLACE, gpx_url: null, fit_url: null, tour_type: 'run', distance_m }).success;
+      publicApiPlaceSchema.safeParse({
+        ...PLACE,
+        gpx_url: null,
+        fit_url: null,
+        tour_type: 'run',
+        distance_m,
+        tour_stage: null,
+      }).success;
     expect(at(0)).toBe(true);
     expect(at(12.5)).toBe(false);
     expect(at(-1)).toBe(false);

@@ -22,11 +22,11 @@ const RIDGE: FitPoint[] = [
 
 /** tour_fit('Gratweg', RIDGE, 17) of the reference encoder, its clock at CREATED_AT. */
 const GOLDEN =
-  '0e205408fb0000002e464954f7264000000000040001000102840202840404860006ff000100603fd0444100001f000205200704010001' +
-  '477261747765670000000000000000000000000000000000000000000000000011420000130009fd048602048603048504048505048506' +
-  '048507048608048609048602603fd044603fd0442d8cb82117d9ce073e30bc21304fd40728922c0028922c0026e70400430000150003fd' +
-  '048600010001010003603fd0440000440000140005fd048600048501048502028405048604603fd0442d8cb82117d9ce07662100000000' +
-  '042444d044355eba211fabd007b8246c0c020004c94ad0443e30bc21304fd4078d2726e7040003c94ad04400098dfb';
+  '0e205408020100002e46495428c840000000000500010001028402028403048c0404860006ff00010001000000603fd0444100001f0002' +
+  '05200704010001477261747765670000000000000000000000000000000000000000000000000011420000130009fd0486020486030485' +
+  '04048505048506048507048608048609048602603fd044603fd0442d8cb82117d9ce073e30bc21304fd40728922c0028922c0026e70400' +
+  '430000150003fd048600010001010003603fd0440000440000140005fd048600048501048502028405048604603fd0442d8cb82117d9ce' +
+  '07662100000000042444d044355eba211fabd007b8246c0c020004c94ad0443e30bc21304fd4078d2726e7040003c94ad04400093304';
 
 /** A file the writer must have produced; a null fails the case here rather than further down. */
 function written(file: Buffer | null): Buffer {
@@ -97,6 +97,7 @@ describe('encodeFitCourse', () => {
     const messages = readMessages(course('Gratweg', 17, RIDGE));
     expect(messages.map((m) => m.global)).toEqual([0, 31, 19, 21, 20, 20, 20, 21]);
     expect(messages[0].fields.get(0)).toBe(6); // a course
+    expect(messages[0].fields.get(3)).toBe(1); // serial_number, 1 unless told
     expect(messages[1].fields.get(4)).toBe(17); // hiking
     expect(messages[3].fields.get(1)).toBe(0); // start
     expect(messages[7].fields.get(1)).toBe(9); // stop_disable_all
@@ -126,6 +127,15 @@ describe('encodeFitCourse', () => {
     expect(field.length).toBe(32);
     expect(field.subarray(0, 30).toString('utf8')).toBe('Ž'.repeat(15));
     expect([...field.subarray(30)]).toEqual([0, 0]);
+  });
+
+  it('FIT-011: MDT-02 a serial of its own tells a course from another written in the same second', () => {
+    const serialOf = (serial?: number) =>
+      readMessages(written(encodeFitCourse('Stage', 17, RIDGE, CREATED_AT, serial)))[0].fields.get(3);
+    expect(serialOf(4161)).toBe(4161);
+    // 0 is no serial in FIT, and a serial past uint32 wraps rather than throws.
+    expect(serialOf(0)).toBe(1);
+    expect(serialOf(2 ** 32 + 5)).toBe(5);
   });
 
   it('FIT-008: no course under two points', () => {

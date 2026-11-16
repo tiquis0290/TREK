@@ -14,11 +14,13 @@ import { Tours } from '../../src/db/entities/Tours.entity';
 import { Trips } from '../../src/db/entities/Trips.entity';
 import { TrekExceptionFilter } from '../../src/nest/common/trek-exception.filter';
 import { ZodValidationPipe } from '../../src/nest/common/zod-validation.pipe';
+import { withRequestContext } from '../../src/nest/database/request-context';
 import { JourneyDomainService } from '../../src/nest/journey/journey-domain.service';
 import { MapsService } from '../../src/nest/maps/maps.service';
 import { PermissionsService } from '../../src/nest/permissions/permissions.service';
 import { RealtimeModule } from '../../src/nest/realtime/realtime.module';
 import { RealtimeService } from '../../src/nest/realtime/realtime.service';
+import { TourGpxExportService } from '../../src/nest/tours/tour-gpx-export.service';
 import { ToursModule } from '../../src/nest/tours/tours.module';
 import { createSnapshotTestDb } from '../helpers/db-mock';
 import { makePlace } from '../helpers/factories/places';
@@ -28,9 +30,12 @@ import { makeTour } from '../helpers/factories/tours';
 import { addTripMember } from '../helpers/factories/trips';
 import { makeUser } from '../helpers/factories/users';
 import { FakeRealtimeService } from '../helpers/fake-realtime';
+import { decodeFit, fromSemicircles, messagesOf, num, referenceFitCrc } from '../helpers/fit-decoder';
 import { createTestMikroOrmModule, createTestOrm, type TestOrm } from '../helpers/test-orm';
 import { TestUnitOfWorkModule } from '../helpers/test-uow';
 import { sessionCookie } from './harness';
+import { MikroORM } from '@mikro-orm/core';
+import { HttpException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import cookieParser from 'cookie-parser';
@@ -251,6 +256,70 @@ describe('Tours planned e2e (real guards + temp SQLite)', () => {
         .set('Cookie', sessionCookie(OWNER));
       expect(off.status).toBe(404);
       expect(off.body).toEqual({ error: 'Tours addon is not enabled' });
+    });
+  });
+
+  describe('the same tour as a FIT course (TourGpxExportService.exportFit)', () => {
+    const exportFit = (tripId: string, placeId: string) =>
+      withRequestContext(app.get(MikroORM), () => app.get(TourGpxExportService).exportFit(tripId, placeId));
+    /** What exportFit refuses with: the status and the body the route would answer. */
+    const refusal = async (tripId: string, placeId: string) => {
+      const error: unknown = await exportFit(tripId, placeId).then(
+        () => null,
+        (thrown: unknown) => thrown,
+      );
+      if (!(error instanceof HttpException)) throw new Error('expected a refusal');
+      return { status: error.getStatus(), body: error.getResponse() };
+    };
+
+    it('the line the GPX writes, its moving time and its trip-place stops, as a valid course', async () => {
+      const hut = await makePlace(orm, 5, { name: 'Höllentalangerhütte', lat: 47.4, lng: 11.0 });
+      const placeId = await createViaApi(
+        5,
+        tourBody({
+          name: 'Grat über Ü',
+          waypoints: [
+            { lat: 47, lng: 11, role: 'start', sequence: 0 },
+            { lat: 47.01, lng: 11.01, role: 'via', sequence: 1, linked_place_id: hut.id },
+            { lat: 47.02, lng: 11.02, role: 'end', sequence: 2 },
+          ],
+        }),
+      );
+      const { fit, filename } = await exportFit('5', String(placeId));
+      expect(filename).toBe('Grat-über-Ü.fit');
+      expect(referenceFitCrc(fit)).toBe(0);
+      const decoded = decodeFit(fit);
+      expect(num(decoded.messages[0], 3)).toBe(placeId); // serial: the tour's own
+      const [course] = messagesOf(decoded, 31);
+      expect(course.fields.get(5)).toBe('Grat über Ü');
+      expect(num(course, 4)).toBe(17); // hiking, as the GPX says
+      const records = messagesOf(decoded, 20);
+      records.forEach((record, i) => {
+        const [lat, lng, ele] = GEOMETRY[i];
+        expect(fromSemicircles(num(record, 0))).toBeCloseTo(lat, 6);
+        expect(fromSemicircles(num(record, 1))).toBeCloseTo(lng, 6);
+        expect(num(record, 2) / 5 - 500).toBe(ele);
+      });
+      expect(records).toHaveLength(GEOMETRY.length);
+      // duration_seconds 3600 is kept as 60 minutes, and the course takes that hour.
+      expect(num(records[2], 253) - num(records[0], 253)).toBe(3600);
+      const [stop] = messagesOf(decoded, 32);
+      expect(stop.fields.get(6)).toBe('Höllentalanger');
+      expect(num(stop, 4)).toBe(num(records[1], 5));
+    });
+
+    it('422 for a tour without a line of two points, 404 for one of another trip, none or a bad id', async () => {
+      const lonely = await makePlace(orm, 5, { name: 'Dot', route_geometry: JSON.stringify([[47, 11, 1]]) });
+      await makeTour(orm, lonely.id, { origin: 'gpx' });
+      expect(await refusal('5', String(lonely.id))).toEqual({
+        status: 422,
+        body: { error: 'This tour has no route to export' },
+      });
+      const elsewhere = await createViaApi(6);
+      expect((await refusal('5', String(elsewhere))).status).toBe(404);
+      const plain = await makePlace(orm, 5, { name: 'Cafe' });
+      expect((await refusal('5', String(plain.id))).status).toBe(404);
+      expect((await refusal('x', '1')).status).toBe(404);
     });
   });
 

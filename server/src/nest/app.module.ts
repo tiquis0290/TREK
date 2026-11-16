@@ -100,6 +100,7 @@ import { StorageModule } from './storage/storage.module';
 import { SystemNoticesModule } from './system-notices/system-notices.module';
 import { TagsModule } from './tags/tags.module';
 import { TodoModule } from './todo/todo.module';
+import { TourGpxSourceModule } from './tours/tour-gpx-source.module';
 import { ToursModule } from './tours/tours.module';
 import { TransitModule } from './transit/transit.module';
 import { TripInviteModule } from './trip-invite/trip-invite.module';
@@ -168,6 +169,8 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
     PlacesModule,
     RoadtripModule,
     ToursModule,
+    // Binds the public API's TOUR_GPX_SOURCE port, globally (see the module).
+    TourGpxSourceModule,
     WandererModule,
     FerratasModule,
     PaddleObstaclesModule,

@@ -35,8 +35,29 @@ export const publicApiPlaceSchema = z.object({
   notes: z.string().nullable(),
   /** How the traveller reaches this stop from the previous one. */
   transport_mode: z.string().nullable(),
+  /**
+   * Where to fetch the tour's route as GPX, for a place that is a tour with a
+   * line of its own; null for every other place, and while the Tours addon is
+   * off. Relative (`/api/v1/trips/{id}/tours/{placeId}/gpx`), because behind a
+   * reverse proxy the instance often does not know the address it is reached
+   * at; resolve it against the base URL you called.
+   */
+  gpx_url: z.string().nullable(),
+  /**
+   * The tour's type in TREK's own words (`hike`, `bike`, `run`, `ski`, `kayak`,
+   * `walk`, …), passed through like a reservation's `type`; null for a place
+   * that is no tour, and while the Tours addon is off.
+   */
+  tour_type: z.string().nullable(),
+  /** The tour's length in whole metres, when TREK knows it; null otherwise. */
+  distance_m: z.number().nullable(),
 });
 export type PublicApiPlace = z.infer<typeof publicApiPlaceSchema>;
+
+/** The relative path a tour's `gpx_url` holds; it must match the server's `trips/:id/tours/:placeId/gpx` route. */
+export function publicApiTourGpxPath(tripId: number, placeId: number): string {
+  return `/api/v1/trips/${tripId}/tours/${placeId}/gpx`;
+}
 
 /** A free-text note pinned to a day, optionally to a time within it. */
 export const publicApiDayNoteSchema = z.object({

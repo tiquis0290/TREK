@@ -1,3 +1,4 @@
+import { contentDisposition } from '../common/content-disposition';
 import { RateLimitService } from '../common/rate-limit.service';
 import { ApiTokenGuard } from './api-token.guard';
 import {
@@ -8,7 +9,7 @@ import {
   requireUserId,
 } from './public-api-request';
 import { PublicApiService } from './public-api.service';
-import { Controller, Get, HttpException, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpException, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
 import {
   PUBLIC_API_INCLUDES,
   publicApiIncludeQuerySchema,
@@ -18,7 +19,7 @@ import {
   type PublicApiTripList,
 } from '@trek/shared';
 
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 /**
  * `/api/v1` — the versioned, read-only surface for third-party integrations.
@@ -28,12 +29,12 @@ import type { Request } from 'express';
  * promise, and the version in the path is what makes that promise keepable — a
  * breaking change ships as `/api/v2` rather than as an edit here.
  *
- * The surface is deliberately small. Two read endpoints are enough for the
- * integrations asking for one (a location tracker enriching its own trips), and a
- * small contract is one that can actually be honoured. Write access is not a
- * missing feature: it would need scope enforcement this surface does not implement
- * yet, and a token that reads everything is a very different thing from one that
- * can also delete a trip.
+ * The surface is deliberately small. A few read endpoints are enough for the
+ * integrations asking for one (a location tracker enriching its own trips, a watch
+ * loading a hike as a course), and a small contract is one that can actually be
+ * honoured. Write access is not a missing feature: it would need scope enforcement
+ * this surface does not implement yet, and a token that reads everything is a very
+ * different thing from one that can also delete a trip.
  *
  * Rate limited per caller rather than per IP — the budget lives in
  * `public-api-request.ts`, because the stats route enforces the same one from
@@ -109,6 +110,40 @@ export class PublicApiController {
     }
     return trip;
   }
+
+  /**
+   * A tour's route as GPX, the file TREK's own export writes: the line with the
+   * heights it has, and the trip's places along it as named waypoints. Places
+   * link here through `gpx_url` (`publicApiTourGpxPath` builds it).
+   *
+   * Needs the `trips` scope like every trip read, and `places`, because a tour
+   * is a place. 404 for a trip the caller may not read (the same body as
+   * `GET /trips/:id`), for a tour the trip does not hold and while the Tours
+   * addon is off; 422 with `code: tour_without_route` for a tour without a line.
+   *
+   * response-contract-exempt: a file download written through @Res(), not a JSON body.
+   */
+  @Get('trips/:id/tours/:placeId/gpx')
+  async getTourGpx(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('placeId') placeId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.limit(req);
+    requireScope(req, 'trips');
+    requireScope(req, 'places');
+    const tripId = parseTripId(id);
+    const tourId = parsePositiveId(placeId, 'Invalid tour id');
+
+    const file = await this.api.getTourGpx(tripId, tourId, requireUserId(req));
+    if (!file) {
+      throw new HttpException({ error: 'Trip not found' }, 404);
+    }
+    res.setHeader('Content-Type', 'application/gpx+xml; charset=utf-8');
+    res.setHeader('Content-Disposition', contentDisposition(file.filename, 'attachment'));
+    res.send(file.gpx);
+  }
 }
 
 /**
@@ -117,12 +152,17 @@ export class PublicApiController {
  * a mangled id is a route whose logs stop matching reality.
  */
 function parseTripId(raw: string): number {
+  return parsePositiveId(raw, 'Invalid trip id');
+}
+
+/** A positive integer path segment, or a 400 with `error` as its message. */
+function parsePositiveId(raw: string, error: string): number {
   if (!/^\d+$/.test(raw)) {
-    throw new HttpException({ error: 'Invalid trip id' }, 400);
+    throw new HttpException({ error }, 400);
   }
   const id = Number(raw);
   if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new HttpException({ error: 'Invalid trip id' }, 400);
+    throw new HttpException({ error }, 400);
   }
   return id;
 }

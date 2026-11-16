@@ -1293,6 +1293,9 @@ describe('PlacesRepository.listAssignedForPublicApi (Plan 4 Task 1, public-api.s
     createDayAssignment(testDb, dayA.id, placeA2.id, { order_index: 5 });
     createDayAssignment(testDb, dayA.id, placeA1.id, { order_index: 1 });
     createDayAssignment(testDb, dayB.id, placeB1.id, { order_index: 0 });
+    // A-first is a hike with a line of its own; the others are plain places.
+    await updateRows(t.orm, Places, { id: placeA1.id }, { route_geometry: '[[47.4,10.9],[47.5,11]]' });
+    await makeTour(t.orm, placeA1.id, { distance: 4.25 });
     // A booked-night stop: da.accommodation_id IS NOT NULL, must be excluded.
     await insertRow(t.orm, DayAssignments, { day: dayA.id, place: hotelPlace.id, order_index: 0, accommodation_id: 999 });
     // Unassigned place in the same trip — never a candidate at all.
@@ -1305,7 +1308,11 @@ describe('PlacesRepository.listAssignedForPublicApi (Plan 4 Task 1, public-api.s
 
     expect(rows.map((r) => r.name)).toEqual(['A-first', 'A-second', 'B-first']);
     expect(rows[0]).toMatchObject({ day_id: dayA.id, name: 'A-first', category: 'Museum' });
+    expect(rows[0]).toMatchObject({ place_id: placeA1.id, tour_type: 'hike', tour_distance_km: 4.25 });
+    expect(Boolean(rows[0]?.has_route)).toBe(true);
     expect(rows[1]).toMatchObject({ day_id: dayA.id, name: 'A-second', category: null });
+    expect(rows[1]).toMatchObject({ place_id: placeA2.id, tour_type: null, tour_distance_km: null });
+    expect(Boolean(rows[1]?.has_route)).toBe(false);
     expect(rows[2]).toMatchObject({ day_id: dayB.id, name: 'B-first' });
   });
 

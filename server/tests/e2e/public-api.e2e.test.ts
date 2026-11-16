@@ -22,17 +22,23 @@ import { AtlasService } from '../../src/nest/atlas/atlas.service';
 import { PublicStatsController } from '../../src/nest/atlas/public-stats.controller';
 import { RateLimitModule } from '../../src/nest/common/rate-limit.module';
 import { TrekExceptionFilter } from '../../src/nest/common/trek-exception.filter';
+import { withRequestContext } from '../../src/nest/database/request-context';
 import { ApiTokenGuard } from '../../src/nest/public-api/api-token.guard';
 import { PublicApiModule } from '../../src/nest/public-api/public-api.module';
 import { TokensModule } from '../../src/nest/tokens/tokens.module';
+import { TourGpxExportService } from '../../src/nest/tours/tour-gpx-export.service';
+import { TourGpxSourceModule } from '../../src/nest/tours/tour-gpx-source.module';
 import { makeBucketListItem } from '../helpers/factories/atlas';
 import { makeCategory } from '../helpers/factories/places';
 import { findRow, insertRow } from '../helpers/factories/rows';
+import { setAddonEnabled } from '../helpers/factories/settings';
 import { makeMcpToken } from '../helpers/factories/tokens';
+import { makeTour } from '../helpers/factories/tours';
 import { addTripMember } from '../helpers/factories/trips';
 import { makeUser } from '../helpers/factories/users';
 import { createTestMikroOrmModule, createTestOrm, type TestOrm } from '../helpers/test-orm';
 import { TestUnitOfWorkModule } from '../helpers/test-uow';
+import { MikroORM } from '@mikro-orm/core';
 import { Test } from '@nestjs/testing';
 
 import type { Server } from 'http';
@@ -81,6 +87,13 @@ const TRIPS_PLACES_TOKEN = 'trek_' + '1'.repeat(48);
 /** api_scopes that cannot be parsed — the fall-back-to-everything case. */
 const BROKEN_SCOPES_TOKEN = 'trek_' + 'f'.repeat(48);
 
+/** A hike's line as `places.route_geometry` stores it: `[lat, lng, height]` points. */
+const RIDGE = JSON.stringify([
+  [47.42, 10.98, 1210],
+  [47.43, 10.99, 1380],
+  [47.44, 11.01, 1525],
+]);
+
 /** Stubbed so /api/v1/stats can be mounted without AtlasModule's whole graph. */
 const STATS = {
   getTravelStats: () => ({
@@ -107,6 +120,8 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
         await createTestMikroOrmModule(db),
         RateLimitModule,
         TokensModule,
+        // Binds the TOUR_GPX_SOURCE port globally, as AppModule does in the app.
+        TourGpxSourceModule,
         PublicApiModule,
       ],
       // `/api/v1/stats` lives in atlas/ because its figures do, but it is guarded
@@ -233,6 +248,19 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
     // The stop a booked night puts on its check-in day, so the route can reach the
     // hotel. It belongs to the stay, not to the day's plan.
     await insertRow(orm, DayAssignments, { day: 1, place: 3, order_index: 2, accommodation_id: 1 });
+
+    // Tours on the shared trip 3, so trip 1's payload stays as the cases above pin it.
+    await insertRow(orm, Days, { id: 30, trip: 3, day_number: 1, date: '2026-08-01' });
+    await insertRow(orm, Places, { id: 30, trip: 3, name: 'Gratweg', lat: 47.42, lng: 10.98, route_geometry: RIDGE });
+    await makeTour(orm, 30, { distance: 12.3456 });
+    await insertRow(orm, DayAssignments, { day: 30, place: 30, order_index: 0 });
+    // A tour with no line of its own, and a plain place that carries one: neither has a GPX link.
+    await insertRow(orm, Places, { id: 31, trip: 3, name: 'Food walk', lat: 47.4, lng: 10.9 });
+    await makeTour(orm, 31, { tourTypeRef: 'food' });
+    await insertRow(orm, Places, { id: 33, trip: 3, name: 'Seilbahn', lat: 47.41, lng: 10.97, route_geometry: RIDGE });
+    // Bob's own trip holds a tour Ada must not be able to fetch.
+    await insertRow(orm, Places, { id: 32, trip: 2, name: 'Bobs Runde', lat: 1, lng: 2, route_geometry: RIDGE });
+    await makeTour(orm, 32);
 
     app = await build();
     server = app.getHttpServer() as Server;
@@ -662,6 +690,97 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
       await get('/api/v1/trips', TRIPS_ONLY_TOKEN);
       const row = (await findRow(orm, McpTokens, { token_prefix: TRIPS_ONLY_TOKEN.slice(0, 13) }))!;
       expect(row.last_used_at).not.toBeNull();
+    });
+  });
+
+  describe('tours', () => {
+    const GPX_URL = '/api/v1/trips/3/tours/30/gpx';
+
+    it('PUBAPI-TOUR-001: a tour carries its GPX link, its type and its length; a plain place none', async () => {
+      const res = await get('/api/v1/trips/3?include=places', ADA_TOKEN);
+      expect(res.status).toBe(200);
+      expect(res.body.days[0].places).toEqual([
+        expect.objectContaining({ name: 'Gratweg', gpx_url: GPX_URL, tour_type: 'hike', distance_m: 12346 }),
+      ]);
+      expect(res.body.unplanned_places).toEqual([
+        expect.objectContaining({ name: 'Food walk', gpx_url: null, tour_type: 'food', distance_m: null }),
+        expect.objectContaining({ name: 'Seilbahn', gpx_url: null, tour_type: null, distance_m: null }),
+      ]);
+    });
+
+    it('PUBAPI-TOUR-002: a place on trip 1, which holds no tour, reports all three as null', async () => {
+      const res = await get('/api/v1/trips/1?include=places', ADA_TOKEN);
+      for (const place of [...res.body.days[0].places, ...res.body.unplanned_places]) {
+        expect(place).toMatchObject({ gpx_url: null, tour_type: null, distance_m: null });
+      }
+    });
+
+    it('PUBAPI-TOUR-003: the GPX link serves the file the app export writes', async () => {
+      const res = await get(GPX_URL, ADA_TOKEN);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/gpx+xml; charset=utf-8');
+      expect(res.headers['content-disposition']).toContain('attachment');
+      const exporter = app.get(TourGpxExportService);
+      const { gpx } = await withRequestContext(app.get(MikroORM), () => exporter.export('3', '30'));
+      expect(res.text).toBe(gpx);
+      expect(res.text).toContain('Gratweg');
+      expect(res.text).toContain('<type>hiking</type>');
+    });
+
+    it("PUBAPI-TOUR-004: another user's trip and a trip that does not exist are the same 404", async () => {
+      const foreign = await get('/api/v1/trips/2/tours/32/gpx', ADA_TOKEN);
+      const missing = await get('/api/v1/trips/424242/tours/32/gpx', ADA_TOKEN);
+      expect(foreign.status).toBe(404);
+      expect(foreign.body).toEqual({ error: 'Trip not found' });
+      expect(missing.status).toBe(404);
+      expect(missing.body).toEqual(foreign.body);
+      // The owner reads it, so the 404 above is the access check and not a missing file.
+      expect((await get('/api/v1/trips/2/tours/32/gpx', BOB_TOKEN)).status).toBe(200);
+    });
+
+    it('PUBAPI-TOUR-005: a tour another trip holds, or a place that is no tour, is a 404', async () => {
+      const elsewhere = await get('/api/v1/trips/3/tours/32/gpx', ADA_TOKEN);
+      const plain = await get('/api/v1/trips/3/tours/33/gpx', ADA_TOKEN);
+      expect(elsewhere.status).toBe(404);
+      expect(plain.status).toBe(404);
+    });
+
+    it('PUBAPI-TOUR-006: a tour without a line is a 422 with a code to branch on', async () => {
+      const res = await get('/api/v1/trips/3/tours/31/gpx', ADA_TOKEN);
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({ error: 'This tour has no route to export', code: 'tour_without_route' });
+    });
+
+    it('PUBAPI-TOUR-007: a malformed tour id is a 400, and no key a 401', async () => {
+      const bad = await get('/api/v1/trips/3/tours/abc/gpx', ADA_TOKEN);
+      expect(bad.status).toBe(400);
+      expect(bad.body).toEqual({ error: 'Invalid tour id' });
+      expect((await get(GPX_URL)).status).toBe(401);
+    });
+
+    it('PUBAPI-TOUR-008: the file needs the places scope, because a tour is a place', async () => {
+      const refused = await get(GPX_URL, TRIPS_DAYS_TOKEN);
+      expect(refused.status).toBe(403);
+      expect(refused.body).toMatchObject({ code: 'API_SCOPE_FORBIDDEN', required_scope: 'places' });
+      expect((await get(GPX_URL, TRIPS_PLACES_TOKEN)).status).toBe(200);
+    });
+
+    it('PUBAPI-TOUR-009: with the Tours addon off, tours read as places and the file is a 404', async () => {
+      await setAddonEnabled(orm, 'tours', false);
+      try {
+        const trip = await get('/api/v1/trips/3?include=places', ADA_TOKEN);
+        expect(trip.body.days[0].places[0]).toMatchObject({
+          name: 'Gratweg',
+          gpx_url: null,
+          tour_type: null,
+          distance_m: null,
+        });
+        const file = await get(GPX_URL, ADA_TOKEN);
+        expect(file.status).toBe(404);
+        expect(file.body).toEqual({ error: 'Tours addon is not enabled' });
+      } finally {
+        await setAddonEnabled(orm, 'tours', true);
+      }
     });
   });
 });

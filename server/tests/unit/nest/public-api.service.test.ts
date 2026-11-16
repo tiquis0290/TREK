@@ -14,8 +14,12 @@ import type { DaysRepository } from '../../../src/db/repositories/Days.repositor
 import type { PlacesRepository } from '../../../src/db/repositories/Places.repository';
 import type { ReservationsRepository } from '../../../src/db/repositories/Reservations.repository';
 import type { TripsRepository } from '../../../src/db/repositories/Trips.repository';
+import type { AddonsService } from '../../../src/nest/addons/addons.service';
+import { DomainError } from '../../../src/nest/common/domain-error';
 import { PublicApiService } from '../../../src/nest/public-api/public-api.service';
+import type { TourGpxSource } from '../../../src/nest/public-api/tour-gpx-source.types';
 import type { TripMembershipService } from '../../../src/nest/trip-membership/trip-membership.service';
+import { NotFoundException } from '@nestjs/common';
 
 import { describe, it, expect, vi } from 'vitest';
 
@@ -35,6 +39,8 @@ function makeService(
     unplannedPlaces?: unknown[];
     accommodations?: unknown[];
     bucketList?: unknown[];
+    toursEnabled?: boolean;
+    exportGpx?: TourGpxSource['export'];
   } = {},
 ) {
   const membership = { listAccessibleTripIds: vi.fn().mockResolvedValue(overrides.accessibleIds ?? []) };
@@ -54,6 +60,8 @@ function makeService(
   const places = { listAssignedForPublicApi: vi.fn().mockResolvedValue(overrides.assignedPlaces ?? []) };
   const dayNotes = { listForPublicApi: vi.fn().mockResolvedValue(overrides.dayNotes ?? []) };
   const bucketList = { listForPublicApi: vi.fn().mockResolvedValue(overrides.bucketList ?? []) };
+  const addons = { isAddonEnabled: vi.fn().mockResolvedValue(overrides.toursEnabled ?? true) };
+  const tourGpx = { export: vi.fn(overrides.exportGpx ?? (async () => ({ gpx: '<gpx/>', filename: 'Ridge.gpx' }))) };
   const service = new PublicApiService(
     membership as unknown as TripMembershipService,
     trips as unknown as TripsRepository,
@@ -62,8 +70,10 @@ function makeService(
     places as unknown as PlacesRepository,
     dayNotes as unknown as DayNotesRepository,
     bucketList as unknown as BucketListRepository,
+    addons as unknown as AddonsService,
+    tourGpx,
   );
-  return { service, membership, trips, reservations };
+  return { service, membership, trips, reservations, addons, tourGpx };
 }
 
 describe('PublicApiService', () => {
@@ -120,6 +130,9 @@ describe('PublicApiService', () => {
         category: null,
         notes: null,
         transport_mode: null,
+        gpx_url: null,
+        tour_type: null,
+        distance_m: null,
       },
     ]);
     expect(day.day_notes).toEqual([{ text: 'Bring cash', time: null }]);
@@ -127,7 +140,7 @@ describe('PublicApiService', () => {
       { type: null, title: null, location: null, time: null, end_time: null, status: null, notes: null },
     ]);
     // Every key is present on the wire, not just equal to null after a lookup.
-    expect(Object.keys(day.places[0]!)).toHaveLength(10);
+    expect(Object.keys(day.places[0]!)).toHaveLength(13);
     expect(Object.keys(day.reservations[0]!)).toHaveLength(7);
   });
 
@@ -156,5 +169,101 @@ describe('PublicApiService', () => {
     await expect(service.listBucketList(1)).resolves.toEqual([
       { name: 'Lofoten', lat: null, lng: null, country_code: null, notes: null, target_date: null },
     ]);
+  });
+
+  describe('tours', () => {
+    /** The tour columns the place reads add, for a place that is no tour. */
+    const NO_TOUR = { place_id: 40, tour_type: null, tour_distance_km: null, has_route: 0 };
+    const DAY = { id: 70, day_number: 1, date: '2026-08-01' };
+
+    it('PUBAPI-SVC-008: a tour with a line carries its GPX link, its type and its length in metres', async () => {
+      const { service } = makeService({
+        days: [DAY],
+        assignedPlaces: [
+          { day_id: 70, name: 'Ridge', place_id: 41, tour_type: 'hike', tour_distance_km: 12.3456, has_route: 1 },
+          { day_id: 70, name: 'Market', ...NO_TOUR },
+        ],
+      });
+      const trip = await service.getTrip(7, 1, ['places']);
+      expect(trip?.days?.[0]?.places).toMatchObject([
+        { name: 'Ridge', gpx_url: '/api/v1/trips/7/tours/41/gpx', tour_type: 'hike', distance_m: 12346 },
+        { name: 'Market', gpx_url: null, tour_type: null, distance_m: null },
+      ]);
+    });
+
+    it('PUBAPI-SVC-009: a tour without a line has no link, and one of unknown length no length', async () => {
+      const { service } = makeService({
+        unplannedPlaces: [
+          { name: 'Food walk', place_id: 42, tour_type: 'food', tour_distance_km: null, has_route: false },
+          // Postgres answers `route_geometry IS NOT NULL` with a boolean.
+          { name: 'Lake loop', place_id: 43, tour_type: 'kayak', tour_distance_km: 0, has_route: true },
+        ],
+      });
+      const trip = await service.getTrip(7, 1, ['places']);
+      expect(trip?.unplanned_places).toMatchObject([
+        { name: 'Food walk', gpx_url: null, tour_type: 'food', distance_m: null },
+        { name: 'Lake loop', gpx_url: '/api/v1/trips/7/tours/43/gpx', tour_type: 'kayak', distance_m: 0 },
+      ]);
+    });
+
+    it('PUBAPI-SVC-010: with the Tours addon off a tour reads as a plain place', async () => {
+      const { service } = makeService({
+        toursEnabled: false,
+        unplannedPlaces: [{ name: 'Ridge', place_id: 41, tour_type: 'hike', tour_distance_km: 5, has_route: 1 }],
+      });
+      const trip = await service.getTrip(7, 1, ['places']);
+      expect(trip?.unplanned_places).toMatchObject([{ gpx_url: null, tour_type: null, distance_m: null }]);
+    });
+
+    it('PUBAPI-SVC-011: a trip read without places never asks about the addon', async () => {
+      const { service, addons } = makeService({ days: [DAY] });
+      await service.getTrip(7, 1, ['days', 'notes']);
+      expect(addons.isAddonEnabled).not.toHaveBeenCalled();
+    });
+
+    it('PUBAPI-SVC-012: the GPX of a readable trip is the export, asked with the ids it parses', async () => {
+      const { service, tourGpx } = makeService();
+      await expect(service.getTourGpx(7, 41, 1)).resolves.toEqual({ gpx: '<gpx/>', filename: 'Ridge.gpx' });
+      expect(tourGpx.export).toHaveBeenCalledWith('7', '41');
+    });
+
+    it('PUBAPI-SVC-013: a trip the caller may not read is null, and the export is never asked', async () => {
+      const { service, tourGpx } = makeService({ accessible: false });
+      await expect(service.getTourGpx(7, 41, 1)).resolves.toBeNull();
+      expect(tourGpx.export).not.toHaveBeenCalled();
+    });
+
+    it('PUBAPI-SVC-014: with the Tours addon off the GPX is a 404, as the app export is', async () => {
+      const { service, tourGpx } = makeService({ toursEnabled: false });
+      const err = await service.getTourGpx(7, 41, 1).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(DomainError);
+      expect((err as DomainError).getStatus()).toBe(404);
+      expect((err as DomainError).toBody()).toEqual({ error: 'Tours addon is not enabled' });
+      expect(tourGpx.export).not.toHaveBeenCalled();
+    });
+
+    it('PUBAPI-SVC-015: a tour without a line is a 422 that names its code in the body', async () => {
+      const { service } = makeService({
+        exportGpx: async () => {
+          throw new DomainError(422, 'This tour has no route to export', { code: 'tour_without_route' });
+        },
+      });
+      const err = await service.getTourGpx(7, 41, 1).catch((e: unknown) => e);
+      expect((err as DomainError).getStatus()).toBe(422);
+      expect((err as DomainError).toBody()).toEqual({
+        error: 'This tour has no route to export',
+        code: 'tour_without_route',
+      });
+    });
+
+    it('PUBAPI-SVC-016: any other refusal of the export passes as it is', async () => {
+      const notFound = new NotFoundException('Tour not found');
+      const unprocessable = new DomainError(422, 'Something else');
+      const { service } = makeService({
+        exportGpx: vi.fn().mockRejectedValueOnce(notFound).mockRejectedValueOnce(unprocessable),
+      });
+      await expect(service.getTourGpx(7, 41, 1)).rejects.toBe(notFound);
+      await expect(service.getTourGpx(7, 41, 1)).rejects.toBe(unprocessable);
+    });
   });
 });

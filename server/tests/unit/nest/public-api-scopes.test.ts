@@ -36,7 +36,7 @@ import {
   type PublicApiScope,
 } from '@trek/shared';
 
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 
 /**
@@ -356,6 +356,24 @@ describe('PublicApiController — what a narrowed key reaches', () => {
     const getTrip = vi.fn();
     expect((await thrownAsync(() => apiController({ getTrip }).getTrip(req(ALL), 'abc', undefined))).status).toBe(400);
     expect(getTrip).not.toHaveBeenCalled();
+  });
+
+  it('PUBAPI-SCOPE-U060: a tour GPX needs `places` as well as `trips`, because a tour is a place', async () => {
+    const getTourGpx = vi.fn();
+    const res = { setHeader: vi.fn(), send: vi.fn() } as unknown as Response;
+    const ctl = apiController({ getTourGpx });
+    const refused = await thrownAsync(() => ctl.getTourGpx(req(limited('trips', 'days')), '12', '40', res));
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({ code: 'API_SCOPE_FORBIDDEN', required_scope: 'places' });
+    expect((await thrownAsync(() => ctl.getTourGpx(req(limited('places')), '12', '40', res))).status).toBe(403);
+    expect(getTourGpx).not.toHaveBeenCalled();
+  });
+
+  it('PUBAPI-SCOPE-U061: a key with `trips` and `places` reads it', async () => {
+    const getTourGpx = vi.fn().mockResolvedValue({ gpx: '<gpx/>', filename: 'Ridge.gpx' });
+    const res = { setHeader: vi.fn(), send: vi.fn() } as unknown as Response;
+    await apiController({ getTourGpx }).getTourGpx(req(limited('trips', 'places')), '12', '40', res);
+    expect(getTourGpx).toHaveBeenCalledWith(12, 40, 7);
   });
 });
 

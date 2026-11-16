@@ -1,3 +1,4 @@
+import { ADDON_IDS } from '../../addons';
 import { BucketList } from '../../db/entities/BucketList.entity';
 import { DayNotes } from '../../db/entities/DayNotes.entity';
 import { Days } from '../../db/entities/Days.entity';
@@ -7,12 +8,17 @@ import { Trips } from '../../db/entities/Trips.entity';
 import type { BucketListRepository } from '../../db/repositories/BucketList.repository';
 import type { DayNotesRepository } from '../../db/repositories/DayNotes.repository';
 import type { DaysRepository } from '../../db/repositories/Days.repository';
-import type { PlacesRepository, PublicApiAssignedPlaceRow } from '../../db/repositories/Places.repository';
+import type { PlacesRepository } from '../../db/repositories/Places.repository';
 import type { ReservationsRepository } from '../../db/repositories/Reservations.repository';
 import type { TripsRepository } from '../../db/repositories/Trips.repository';
+import type { PublicApiAssignedPlaceRow, PublicApiTourColumns } from '../../db/repositories/place-public-api-rows';
+import { AddonsService } from '../addons/addons.service';
+import { DomainError } from '../common/domain-error';
 import { TripMembershipService } from '../trip-membership/trip-membership.service';
+import { TOUR_GPX_SOURCE, type TourGpxSource } from './tour-gpx-source.types';
 import { InjectRepository } from '@mikro-orm/nestjs';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { publicApiTourGpxPath } from '@trek/shared';
 import type {
   PublicApiAccommodation,
   PublicApiBucketListItem,
@@ -62,6 +68,8 @@ export class PublicApiService {
     @InjectRepository(Places) private readonly placesRepo: PlacesRepository,
     @InjectRepository(DayNotes) private readonly dayNotesRepo: DayNotesRepository,
     @InjectRepository(BucketList) private readonly bucketListRepo: BucketListRepository,
+    private readonly addons: AddonsService,
+    @Inject(TOUR_GPX_SOURCE) private readonly tourGpx: TourGpxSource,
   ) {}
 
   /** Every trip the token's owner may read, newest first, without itineraries. */
@@ -90,6 +98,8 @@ export class PublicApiService {
     if (!row) return null;
 
     const trip: PublicApiTrip = toTripSummary(row);
+    // Tours are places of the trip; while the addon is off they read as plain places.
+    const tours = include.includes('places') && (await this.addons.isAddonEnabled(ADDON_IDS.TOURS));
     // Places, notes and reservations hang off days, so asking for one of them
     // and not for `days` used to return the trip and nothing else — silently,
     // which is the worst way to answer. Days are implied instead.
@@ -99,10 +109,10 @@ export class PublicApiService {
     // through the container those places arrive in. The shell it does get is the
     // join key the children are useless without.
     if (DAY_SCOPED.some((section) => include.includes(section))) {
-      trip.days = await this.buildDays(tripId, include, granted.includes('days'));
+      trip.days = await this.buildDays(tripId, include, granted.includes('days'), tours);
     }
     if (include.includes('places')) {
-      trip.unplanned_places = await this.buildUnplannedPlaces(tripId);
+      trip.unplanned_places = await this.buildUnplannedPlaces(tripId, tours);
     }
     if (include.includes('reservations')) {
       trip.unscheduled_reservations = await this.buildUnscheduledReservations(tripId);
@@ -124,11 +134,16 @@ export class PublicApiService {
    * rather than queried per day — a two-week trip would otherwise cost 42 round
    * trips for the same rows.
    */
-  private async buildDays(tripId: number, include: PublicApiInclude[], dayFields: boolean): Promise<PublicApiDay[]> {
+  private async buildDays(
+    tripId: number,
+    include: PublicApiInclude[],
+    dayFields: boolean,
+    tours: boolean,
+  ): Promise<PublicApiDay[]> {
     const days = await this.daysRepo.listForPublicApi(tripId);
     if (days.length === 0) return [];
 
-    const placesByDay = include.includes('places') ? await this.placesByDay(tripId) : new Map();
+    const placesByDay = include.includes('places') ? await this.placesByDay(tripId, tours) : new Map();
     const notesByDay = include.includes('notes') ? await this.dayNotesByDay(tripId) : new Map();
     const reservationsByDay = include.includes('reservations') ? await this.reservationsByDay(tripId) : new Map();
 
@@ -156,9 +171,13 @@ export class PublicApiService {
    * listed here as well it would read as two different intentions. Same rule as
    * the shortlist below.
    */
-  private async placesByDay(tripId: number): Promise<Map<number, PublicApiPlace[]>> {
+  private async placesByDay(tripId: number, tours: boolean): Promise<Map<number, PublicApiPlace[]>> {
     const rows = await this.placesRepo.listAssignedForPublicApi(tripId);
-    return groupBy<PublicApiAssignedPlaceRow, PublicApiPlace>(rows, (r) => r.day_id, toPlace);
+    return groupBy<PublicApiAssignedPlaceRow, PublicApiPlace>(
+      rows,
+      (r) => r.day_id,
+      (r) => toPlace(r, tripId, tours),
+    );
   }
 
   private async dayNotesByDay(tripId: number): Promise<Map<number, PublicApiDayNote[]>> {
@@ -222,9 +241,32 @@ export class PublicApiService {
    * but it is not a shortlist entry and it is already reported in full under
    * `accommodations` — listing it twice would read as two different intentions.
    */
-  private async buildUnplannedPlaces(tripId: number): Promise<PublicApiPlace[]> {
+  private async buildUnplannedPlaces(tripId: number, tours: boolean): Promise<PublicApiPlace[]> {
     const rows = await this.reservationsRepo.listUnplannedPlacesForPublicApi(tripId);
-    return rows.map(toPlace);
+    return rows.map((r) => toPlace(r, tripId, tours));
+  }
+
+  /**
+   * A tour's route as GPX: the file TREK's own export writes, through the
+   * TOUR_GPX_SOURCE port. Null when the caller may not read the trip, which
+   * the controller answers exactly as the trip route does, so a tour id cannot
+   * be used to probe someone else's trips either.
+   *
+   * While the Tours addon is off this is a 404, as the app's own export
+   * answers. The export's refusal of a tour without a line is passed on with
+   * its code in the body, because this surface promises one an integration can
+   * branch on; every other error passes as it is.
+   */
+  async getTourGpx(tripId: number, placeId: number, userId: number): Promise<{ gpx: string; filename: string } | null> {
+    if (!(await this.addons.isAddonEnabled(ADDON_IDS.TOURS))) {
+      throw new DomainError(404, 'Tours addon is not enabled');
+    }
+    if (!(await this.tripsRepo.findAccessible(tripId, userId))) return null;
+    try {
+      return await this.tourGpx.export(String(tripId), String(placeId));
+    } catch (err) {
+      throw withPublicTourCode(err);
+    }
   }
 
   /**
@@ -286,7 +328,8 @@ const DAY_SCOPED: PublicApiInclude[] = ['days', 'places', 'notes', 'reservations
  * a day and for unscheduled ones. Two copies would drift, and the second copy is
  * always the one that forgets a field.
  */
-function toPlace(row: Omit<PlaceRow, 'day_id'>): PublicApiPlace {
+function toPlace(row: Omit<PlaceRow, 'day_id'>, tripId: number, tours: boolean): PublicApiPlace {
+  const tour = tours && row.tour_type ? row : null;
   return {
     name: row.name,
     address: row.address ?? null,
@@ -298,7 +341,18 @@ function toPlace(row: Omit<PlaceRow, 'day_id'>): PublicApiPlace {
     category: row.category ?? null,
     notes: row.notes ?? null,
     transport_mode: row.transport_mode ?? null,
+    gpx_url: tour?.has_route ? publicApiTourGpxPath(tripId, tour.place_id) : null,
+    tour_type: tour?.tour_type ?? null,
+    distance_m: tour?.tour_distance_km != null ? Math.round(tour.tour_distance_km * 1000) : null,
   };
+}
+
+/** The export's refusal of a tour without a line, with its code in the body; anything else unchanged. */
+function withPublicTourCode(err: unknown): unknown {
+  if (err instanceof DomainError && err.code === 'tour_without_route') {
+    return new DomainError(422, err.publicMessage, { code: err.code, details: { code: err.code } });
+  }
+  return err;
 }
 
 function toReservation(row: Omit<ReservationRow, 'day_id'>): PublicApiReservation {
@@ -356,7 +410,7 @@ interface DayRow {
   notes: string | null;
 }
 
-interface PlaceRow {
+interface PlaceRow extends PublicApiTourColumns {
   day_id: number;
   name: string;
   address: string | null;

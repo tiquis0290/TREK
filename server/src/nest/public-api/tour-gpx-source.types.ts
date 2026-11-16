@@ -1,7 +1,8 @@
 /**
  * What the public API reads a tour's route through: the GPX file TREK's own
  * export writes (`TourGpxExportService`), so an integration gets the same file
- * the app hands out.
+ * the app hands out, and the FIT course that export writes from the same line
+ * for a watch.
  *
  * A port rather than the export service itself: Tours reaches, through the
  * domains it imports, the Atlas domain, which mounts this domain's token
@@ -19,4 +20,7 @@ export interface TourGpxSource {
    * the caller's to decide.
    */
   export(tripId: string, placeId: string): Promise<{ gpx: string; filename: string }>;
+
+  /** The same tour as a FIT course, from the same line, under the same refusals as `export`. */
+  exportFit(tripId: string, placeId: string): Promise<{ fit: Buffer; filename: string }>;
 }

@@ -41,6 +41,7 @@ function makeService(
     bucketList?: unknown[];
     toursEnabled?: boolean;
     exportGpx?: TourGpxSource['export'];
+    exportFit?: TourGpxSource['exportFit'];
   } = {},
 ) {
   const membership = { listAccessibleTripIds: vi.fn().mockResolvedValue(overrides.accessibleIds ?? []) };
@@ -61,7 +62,10 @@ function makeService(
   const dayNotes = { listForPublicApi: vi.fn().mockResolvedValue(overrides.dayNotes ?? []) };
   const bucketList = { listForPublicApi: vi.fn().mockResolvedValue(overrides.bucketList ?? []) };
   const addons = { isAddonEnabled: vi.fn().mockResolvedValue(overrides.toursEnabled ?? true) };
-  const tourGpx = { export: vi.fn(overrides.exportGpx ?? (async () => ({ gpx: '<gpx/>', filename: 'Ridge.gpx' }))) };
+  const tourGpx = {
+    export: vi.fn(overrides.exportGpx ?? (async () => ({ gpx: '<gpx/>', filename: 'Ridge.gpx' }))),
+    exportFit: vi.fn(overrides.exportFit ?? (async () => ({ fit: Buffer.from('.FIT'), filename: 'Ridge.fit' }))),
+  };
   const service = new PublicApiService(
     membership as unknown as TripMembershipService,
     trips as unknown as TripsRepository,
@@ -277,6 +281,35 @@ describe('PublicApiService', () => {
       });
       await expect(service.getTourGpx(7, 41, 1)).rejects.toBe(unprocessable);
       await expect(service.getTourGpx(7, 41, 1)).rejects.toBe(broken);
+    });
+
+    it('PUBAPI-SVC-017: the FIT course of a readable trip is the export’s, asked with the same ids', async () => {
+      const { service, tourGpx } = makeService();
+      await expect(service.getTourFit(7, 41, 1)).resolves.toEqual({ fit: Buffer.from('.FIT'), filename: 'Ridge.fit' });
+      expect(tourGpx.exportFit).toHaveBeenCalledWith('7', '41');
+      expect(tourGpx.export).not.toHaveBeenCalled();
+    });
+
+    it('PUBAPI-SVC-018: the FIT course passes every check of the GPX: access, addon and the public code', async () => {
+      const unreadable = makeService({ accessible: false });
+      await expect(unreadable.service.getTourFit(7, 41, 1)).resolves.toBeNull();
+      expect(unreadable.tourGpx.exportFit).not.toHaveBeenCalled();
+
+      const off = makeService({ toursEnabled: false });
+      const offErr = await off.service.getTourFit(7, 41, 1).catch((e: unknown) => e);
+      expect((offErr as DomainError).getStatus()).toBe(404);
+      expect(off.tourGpx.exportFit).not.toHaveBeenCalled();
+
+      const { service } = makeService({
+        exportFit: async () => {
+          throw new DomainError(422, 'This tour has no route to export', { code: 'tour_without_route' });
+        },
+      });
+      const err = await service.getTourFit(7, 41, 1).catch((e: unknown) => e);
+      expect((err as DomainError).toBody()).toEqual({
+        error: 'This tour has no route to export',
+        code: 'tour_without_route',
+      });
     });
   });
 });

@@ -37,6 +37,7 @@ import { makeMcpToken } from '../helpers/factories/tokens';
 import { makeTour } from '../helpers/factories/tours';
 import { addTripMember } from '../helpers/factories/trips';
 import { makeUser } from '../helpers/factories/users';
+import { decodeFit, fromSemicircles, messagesOf, num, referenceFitCrc } from '../helpers/fit-decoder';
 import { createTestMikroOrmModule, createTestOrm, type TestOrm } from '../helpers/test-orm';
 import { TestUnitOfWorkModule } from '../helpers/test-uow';
 import { MikroORM } from '@mikro-orm/core';
@@ -802,6 +803,90 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
         expect(res.status).toBe(404);
         expect(res.headers['content-type']).toContain('application/json');
         expect(res.body).toEqual({ error: 'Tour not found' });
+      } finally {
+        process.env.NODE_ENV = previousEnv;
+      }
+    });
+  });
+
+  describe('tours as FIT courses', () => {
+    const FIT_URL = '/api/v1/trips/3/tours/30/fit';
+    /** The FIT download as its bytes, whatever the status. */
+    const getFit = (path: string, token?: string) =>
+      get(path, token)
+        .buffer(true)
+        .parse((res, done) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () => done(null, Buffer.concat(chunks)));
+        });
+    const json = (body: unknown) => JSON.parse((body as Buffer).toString('utf8')) as unknown;
+
+    it('PUBAPI-TOUR-011: the FIT route serves the GPX’s line as a course that decodes back to it', async () => {
+      const res = await getFit(FIT_URL, ADA_TOKEN);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/vnd.ant.fit');
+      expect(res.headers['content-disposition']).toContain('attachment');
+      expect(res.headers['content-disposition']).toContain('Gratweg.fit');
+      const file = res.body as Buffer;
+      expect(referenceFitCrc(file)).toBe(0);
+      const fit = decodeFit(file);
+      expect(fit.signature).toBe('.FIT');
+      expect(num(fit.messages[0], 0)).toBe(6); // a course file
+      expect(messagesOf(fit, 31)[0].fields.get(5)).toBe('Gratweg');
+      const points = messagesOf(fit, 20).map((r) => [
+        Number(fromSemicircles(num(r, 0)).toFixed(6)),
+        Number(fromSemicircles(num(r, 1)).toFixed(6)),
+        num(r, 2) / 5 - 500,
+      ]);
+      expect(points).toEqual(JSON.parse(RIDGE));
+    });
+
+    it('PUBAPI-TOUR-012: the same 404s, 422, 400 and 401 as the GPX route', async () => {
+      const foreign = await getFit('/api/v1/trips/2/tours/32/fit', ADA_TOKEN);
+      expect(foreign.status).toBe(404);
+      expect(json(foreign.body)).toEqual({ error: 'Trip not found' });
+      expect((await getFit('/api/v1/trips/2/tours/32/fit', BOB_TOKEN)).status).toBe(200);
+      const notATour = await getFit('/api/v1/trips/3/tours/33/fit', ADA_TOKEN);
+      expect(notATour.status).toBe(404);
+      expect(json(notATour.body)).toEqual({ error: 'Tour not found' });
+      const lineless = await getFit('/api/v1/trips/3/tours/31/fit', ADA_TOKEN);
+      expect(lineless.status).toBe(422);
+      expect(json(lineless.body)).toEqual({ error: 'This tour has no route to export', code: 'tour_without_route' });
+      const bad = await getFit('/api/v1/trips/3/tours/abc/fit', ADA_TOKEN);
+      expect(bad.status).toBe(400);
+      expect(json(bad.body)).toEqual({ error: 'Invalid tour id' });
+      expect((await getFit(FIT_URL)).status).toBe(401);
+    });
+
+    it('PUBAPI-TOUR-013: the places scope is needed, and the route is a 404 while the Tours addon is off', async () => {
+      const refused = await getFit(FIT_URL, TRIPS_DAYS_TOKEN);
+      expect(refused.status).toBe(403);
+      expect(json(refused.body)).toMatchObject({ code: 'API_SCOPE_FORBIDDEN', required_scope: 'places' });
+      expect((await getFit(FIT_URL, TRIPS_PLACES_TOKEN)).status).toBe(200);
+      await setAddonEnabled(orm, 'tours', false);
+      try {
+        const off = await getFit(FIT_URL, ADA_TOKEN);
+        expect(off.status).toBe(404);
+        expect(json(off.body)).toEqual({ error: 'Tours addon is not enabled' });
+      } finally {
+        await setAddonEnabled(orm, 'tours', true);
+      }
+    });
+
+    it('PUBAPI-TOUR-014: in production an unknown tour is the JSON 404 here too, not the SPA page', async () => {
+      const UNMATCHED = '/api/v1/no-such-route';
+      const routerMiss = await get(UNMATCHED, ADA_TOKEN);
+      const previousEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        // The control of PUBAPI-TOUR-010: the SPA fallback now takes an unmatched GET.
+        expect((await get(UNMATCHED, ADA_TOKEN)).text).not.toBe(routerMiss.text);
+
+        const res = await getFit('/api/v1/trips/3/tours/999999/fit', ADA_TOKEN);
+        expect(res.status).toBe(404);
+        expect(res.headers['content-type']).toContain('application/json');
+        expect(json(res.body)).toEqual({ error: 'Tour not found' });
       } finally {
         process.env.NODE_ENV = previousEnv;
       }

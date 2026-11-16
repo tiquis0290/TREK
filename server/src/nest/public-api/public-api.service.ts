@@ -17,7 +17,7 @@ import { DomainError } from '../common/domain-error';
 import { TripMembershipService } from '../trip-membership/trip-membership.service';
 import { TOUR_GPX_SOURCE, type TourGpxSource } from './tour-gpx-source.types';
 import { InjectRepository } from '@mikro-orm/nestjs';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { publicApiTourGpxPath } from '@trek/shared';
 import type {
   PublicApiAccommodation,
@@ -253,9 +253,10 @@ export class PublicApiService {
    * be used to probe someone else's trips either.
    *
    * While the Tours addon is off this is a 404, as the app's own export
-   * answers. The export's refusal of a tour without a line is passed on with
-   * its code in the body, because this surface promises one an integration can
-   * branch on; every other error passes as it is.
+   * answers. The export's refusals are turned into this surface's own: a tour
+   * the trip does not hold is a 404 JSON body, and a tour without a line a 422
+   * with its code in the body, because this surface promises one an
+   * integration can branch on.
    */
   async getTourGpx(tripId: number, placeId: number, userId: number): Promise<{ gpx: string; filename: string } | null> {
     if (!(await this.addons.isAddonEnabled(ADDON_IDS.TOURS))) {
@@ -265,7 +266,7 @@ export class PublicApiService {
     try {
       return await this.tourGpx.export(String(tripId), String(placeId));
     } catch (err) {
-      throw withPublicTourCode(err);
+      throw toPublicTourError(err);
     }
   }
 
@@ -347,8 +348,19 @@ function toPlace(row: Omit<PlaceRow, 'day_id'>, tripId: number, tours: boolean):
   };
 }
 
-/** The export's refusal of a tour without a line, with its code in the body; anything else unchanged. */
-function withPublicTourCode(err: unknown): unknown {
+/**
+ * The export's refusals as this surface answers them; anything else unchanged.
+ *
+ * A tour the trip does not hold leaves the export as Nest's NotFoundException,
+ * which the production SPA fallback (`SpaFallbackFilter`) answers on a GET with
+ * index.html and a 200. Raised again as a DomainError it is an HttpException
+ * that filter does not catch, so the client gets the JSON 404 this surface
+ * documents. A tour without a line keeps its code, now in the body as well.
+ */
+function toPublicTourError(err: unknown): unknown {
+  if (err instanceof NotFoundException) {
+    return new DomainError(404, 'Tour not found');
+  }
   if (err instanceof DomainError && err.code === 'tour_without_route') {
     return new DomainError(422, err.publicMessage, { code: err.code, details: { code: err.code } });
   }

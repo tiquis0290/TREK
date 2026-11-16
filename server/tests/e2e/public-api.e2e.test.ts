@@ -23,6 +23,7 @@ import { PublicStatsController } from '../../src/nest/atlas/public-stats.control
 import { RateLimitModule } from '../../src/nest/common/rate-limit.module';
 import { TrekExceptionFilter } from '../../src/nest/common/trek-exception.filter';
 import { withRequestContext } from '../../src/nest/database/request-context';
+import { SpaFallbackFilter } from '../../src/nest/platform/spa-fallback.filter';
 import { ApiTokenGuard } from '../../src/nest/public-api/api-token.guard';
 import { PublicApiModule } from '../../src/nest/public-api/public-api.module';
 import { TokensModule } from '../../src/nest/tokens/tokens.module';
@@ -135,7 +136,10 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
       providers: [ApiTokenGuard, { provide: AtlasService, useValue: STATS }],
     }).compile();
     const nest = moduleRef.createNestApplication();
-    nest.useGlobalFilters(new TrekExceptionFilter());
+    // The pair and order of AppModule's APP_FILTERs: in production the SPA
+    // fallback answers every NotFoundException on a GET, so a 404 this surface
+    // documents as JSON has to reach the client as some other HttpException.
+    nest.useGlobalFilters(new TrekExceptionFilter(), new SpaFallbackFilter());
     await nest.init();
     return nest;
   }
@@ -780,6 +784,26 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
         expect(file.body).toEqual({ error: 'Tours addon is not enabled' });
       } finally {
         await setAddonEnabled(orm, 'tours', true);
+      }
+    });
+
+    it('PUBAPI-TOUR-010: in production an unknown tour is still the JSON 404, not the SPA page', async () => {
+      const UNMATCHED = '/api/v1/no-such-route';
+      const routerMiss = await get(UNMATCHED, ADA_TOKEN);
+      const previousEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        // The control: in this mode the SPA fallback takes an unmatched GET. It
+        // answers index.html, or the error of sending it where no client is
+        // built, never the router's own 404 it answers outside production.
+        expect((await get(UNMATCHED, ADA_TOKEN)).text).not.toBe(routerMiss.text);
+
+        const res = await get('/api/v1/trips/3/tours/999999/gpx', ADA_TOKEN);
+        expect(res.status).toBe(404);
+        expect(res.headers['content-type']).toContain('application/json');
+        expect(res.body).toEqual({ error: 'Tour not found' });
+      } finally {
+        process.env.NODE_ENV = previousEnv;
       }
     });
   });

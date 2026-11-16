@@ -49,14 +49,30 @@ export const publicApiPlaceSchema = z.object({
    * that is no tour, and while the Tours addon is off.
    */
   tour_type: z.string().nullable(),
-  /** The tour's length in whole metres, when TREK knows it; null otherwise. */
+  /**
+   * The tour's length in whole metres, when TREK knows it; null otherwise. For
+   * a day that holds one stage of a multi-day tour, the length of that stage.
+   */
   distance_m: z.number().nullable(),
+  /**
+   * MDT-02: which stage of a multi-day tour the day holds, `number` counted
+   * from 1 of `count`. `gpx_url` then carries `?stage=` and serves that stage's
+   * stretch of the route alone (the FIT route beside it takes the same query).
+   * Null for a place that is no tour, a day tour, a day that holds the whole of
+   * a multi-day tour, and every unplanned place.
+   */
+  tour_stage: z.object({ number: z.number().int().positive(), count: z.number().int().min(2) }).nullable(),
 });
 export type PublicApiPlace = z.infer<typeof publicApiPlaceSchema>;
 
-/** The relative path a tour's `gpx_url` names: its route as GPX, under every rule of the trip it is on. */
-export function publicApiTourGpxPath(tripId: number, placeId: number): string {
-  return `/api/v1/trips/${tripId}/tours/${placeId}/gpx`;
+/**
+ * The relative path a tour's `gpx_url` names: its route as GPX, under every
+ * rule of the trip it is on; for one stage of a multi-day tour (MDT-02), asked
+ * for by the key of the stop the stage starts at.
+ */
+export function publicApiTourGpxPath(tripId: number, placeId: number, stageKey?: string): string {
+  const path = `/api/v1/trips/${tripId}/tours/${placeId}/gpx`;
+  return stageKey === undefined ? path : `${path}?stage=${encodeURIComponent(stageKey)}`;
 }
 
 /** A free-text note pinned to a day, optionally to a time within it. */

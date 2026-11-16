@@ -1321,7 +1321,7 @@ export class PlacesRepository extends TrekRepository<Places> {
       .leftJoin('categories as c', 'c.id', 'p.category_id')
       .leftJoin('tours as t', 't.place_id', 'p.id')
       .select((eb) => [
-        'da.day_id',
+        'da.day_id', 'da.tour_stage_key',
         'p.name', 'p.address', 'p.lat', 'p.lng', 'p.place_time', 'p.end_time',
         'p.duration_minutes', 'p.notes', 'p.transport_mode', 'c.name as category',
         'p.id as place_id', 't.tour_type', 't.distance as tour_distance_km', eb('p.route_geometry', 'is not', null).as('has_route'),

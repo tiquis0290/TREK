@@ -19,8 +19,24 @@ export interface TourGpxSource {
    * `tour_without_route` for a tour without a line. Who may read the trip is
    * the caller's to decide.
    */
-  export(tripId: string, placeId: string): Promise<{ gpx: string; filename: string }>;
+  export(tripId: string, placeId: string, stageKey?: string): Promise<{ gpx: string; filename: string }>;
 
   /** The same tour as a FIT course, from the same line, under the same refusals as `export`. */
-  exportFit(tripId: string, placeId: string): Promise<{ fit: Buffer; filename: string }>;
+  exportFit(tripId: string, placeId: string, stageKey?: string): Promise<{ fit: Buffer; filename: string }>;
+
+  /** MDT-02: the stages each of these tours of the trip is cut into, by place id; a day tour has none. */
+  stagesOf(tripId: number, placeIds: readonly number[]): Promise<Map<number, TourStageFacts[]>>;
+}
+
+/**
+ * MDT-02: one stage of a multi-day tour as the public API lists it on the day
+ * that holds it. Given its `key` (the stop it starts at), `export` and
+ * `exportFit` serve that stage's stretch of the line alone, and answer 404
+ * (`Tour stage not found`) for a stage the tour does not have.
+ */
+export interface TourStageFacts {
+  key: string;
+  number: number;
+  count: number;
+  distance_m: number;
 }

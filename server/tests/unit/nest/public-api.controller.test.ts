@@ -178,7 +178,7 @@ describe('PublicApiController', () => {
       const getTourGpx = vi.fn().mockResolvedValue({ gpx: '<gpx/>', filename: 'Ridge.gpx' });
       const res = fakeRes();
       await makeController({ getTourGpx }).getTourGpx(req(7), '12', '40', res as unknown as Response);
-      expect(getTourGpx).toHaveBeenCalledWith(12, 40, 7);
+      expect(getTourGpx).toHaveBeenCalledWith(12, 40, 7, undefined);
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/gpx+xml; charset=utf-8');
       expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('Ridge.gpx'));
       expect(res.send).toHaveBeenCalledWith('<gpx/>');
@@ -228,7 +228,7 @@ describe('PublicApiController', () => {
       const getTourFit = vi.fn().mockResolvedValue({ fit, filename: 'Ridge.fit' });
       const res = fakeRes();
       await makeController({ getTourFit }).getTourFit(req(7), '12', '40', res as unknown as Response);
-      expect(getTourFit).toHaveBeenCalledWith(12, 40, 7);
+      expect(getTourFit).toHaveBeenCalledWith(12, 40, 7, undefined);
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/vnd.ant.fit');
       expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('Ridge.fit'));
       expect(res.send).toHaveBeenCalledWith(fit);
@@ -247,6 +247,21 @@ describe('PublicApiController', () => {
       });
       const spent = makeController({ getTourFit }, false);
       expect((await thrownAsync(() => spent.getTourFit(req(7), '12', '40', res))).status).toBe(429);
+      expect(getTourFit).toHaveBeenCalledTimes(1);
+    });
+
+    it('MDT-02: passes ?stage= on to the file, and 400s an empty or repeated one', async () => {
+      const getTourFit = vi.fn().mockResolvedValue({ fit: Buffer.from([14]), filename: 'Ridge 2-3.fit' });
+      const res = fakeRes() as unknown as Response;
+      const controller = makeController({ getTourFit });
+      await controller.getTourFit(req(7), '12', '40', res, 'hut');
+      expect(getTourFit).toHaveBeenCalledWith(12, 40, 7, 'hut');
+      for (const bad of ['', ['hut', 'lake']]) {
+        expect(await thrownAsync(() => controller.getTourFit(req(7), '12', '40', res, bad))).toEqual({
+          status: 400,
+          body: { error: 'Invalid tour stage' },
+        });
+      }
       expect(getTourFit).toHaveBeenCalledTimes(1);
     });
   });

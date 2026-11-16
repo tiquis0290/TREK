@@ -15,7 +15,7 @@ import type { PublicApiTourColumns } from '../../db/repositories/place-public-ap
 import { AddonsService } from '../addons/addons.service';
 import { DomainError } from '../common/domain-error';
 import { TripMembershipService } from '../trip-membership/trip-membership.service';
-import { TOUR_GPX_SOURCE, type TourGpxSource } from './tour-gpx-source.types';
+import { TOUR_GPX_SOURCE, type TourGpxSource, type TourStageFacts } from './tour-gpx-source.types';
 import { toPublicEndpoints, transitLegsOf } from './public-api.helpers';
 import { InjectRepository } from '@mikro-orm/nestjs';
 import { Inject, Injectable } from '@nestjs/common';
@@ -180,11 +180,26 @@ export class PublicApiService {
    */
   private async placesByDay(tripId: number, tours: boolean): Promise<Map<number, PublicApiPlace[]>> {
     const rows = await this.placesRepo.listAssignedForPublicApi(tripId);
+    const stages = tours ? await this.tourStagesOf(tripId, rows) : new Map<number, TourStageFacts[]>();
     return groupBy<PublicApiAssignedPlaceRow, PublicApiPlace>(
       rows,
       (r) => r.day_id,
-      (r) => toPlace(r, tripId, tours),
+      (r) => toPlace(r, tripId, tours, stages.get(r.place_id)?.find((stage) => stage.key === r.tour_stage_key) ?? null),
     );
+  }
+
+  /**
+   * MDT-02: the stages of the multi-day tours a day holds one stage of, so the
+   * day hands out that stage's file. Asked for only where a day names a stage;
+   * a stage the tour no longer has, or its line does not reach, leaves the day
+   * with the whole tour.
+   */
+  private async tourStagesOf(
+    tripId: number,
+    rows: readonly PublicApiAssignedPlaceRow[],
+  ): Promise<Map<number, TourStageFacts[]>> {
+    const staged = rows.filter((r) => r.tour_type && r.has_route && r.tour_stage_key).map((r) => r.place_id);
+    return staged.length > 0 ? this.tourGpx.stagesOf(tripId, staged) : new Map();
   }
 
   private async dayNotesByDay(tripId: number): Promise<Map<number, PublicApiDayNote[]>> {
@@ -284,14 +299,27 @@ export class PublicApiService {
    * answers. The export's refusal of a tour without a line is passed on with
    * its code in the body, because this surface promises one an integration can
    * branch on; every other error passes as it is.
+   *
+   * With a stage key (MDT-02, the `?stage=` a day's `gpx_url` carries) the file
+   * holds that stage's stretch alone; a stage the tour does not have is a 404.
    */
-  async getTourGpx(tripId: number, placeId: number, userId: number): Promise<{ gpx: string; filename: string } | null> {
-    return this.readTourFile(tripId, userId, () => this.tourGpx.export(String(tripId), String(placeId)));
+  async getTourGpx(
+    tripId: number,
+    placeId: number,
+    userId: number,
+    stageKey?: string,
+  ): Promise<{ gpx: string; filename: string } | null> {
+    return this.readTourFile(tripId, userId, () => this.tourGpx.export(String(tripId), String(placeId), stageKey));
   }
 
   /** The same tour as a FIT course for a watch, under every rule of {@link getTourGpx}. */
-  async getTourFit(tripId: number, placeId: number, userId: number): Promise<{ fit: Buffer; filename: string } | null> {
-    return this.readTourFile(tripId, userId, () => this.tourGpx.exportFit(String(tripId), String(placeId)));
+  async getTourFit(
+    tripId: number,
+    placeId: number,
+    userId: number,
+    stageKey?: string,
+  ): Promise<{ fit: Buffer; filename: string } | null> {
+    return this.readTourFile(tripId, userId, () => this.tourGpx.exportFit(String(tripId), String(placeId), stageKey));
   }
 
   /** The checks every tour file passes before `read` writes it, and the public code on its refusal. */
@@ -369,8 +397,15 @@ const DAY_SCOPED: PublicApiInclude[] = ['days', 'places', 'notes', 'reservations
  * a day and for unscheduled ones. Two copies would drift, and the second copy is
  * always the one that forgets a field.
  */
-function toPlace(row: Omit<PlaceRow, 'day_id'>, tripId: number, tours: boolean): PublicApiPlace {
+function toPlace(
+  row: Omit<PlaceRow, 'day_id'>,
+  tripId: number,
+  tours: boolean,
+  stage: TourStageFacts | null = null,
+): PublicApiPlace {
   const tour = tours && row.tour_type ? row : null;
+  // MDT-02: a day that holds one stage of a multi-day tour hands out that stage.
+  const staged = tour?.has_route ? stage : null;
   return {
     name: row.name,
     address: row.address ?? null,
@@ -382,9 +417,14 @@ function toPlace(row: Omit<PlaceRow, 'day_id'>, tripId: number, tours: boolean):
     category: row.category ?? null,
     notes: row.notes ?? null,
     transport_mode: row.transport_mode ?? null,
-    gpx_url: tour?.has_route ? publicApiTourGpxPath(tripId, tour.place_id) : null,
+    gpx_url: tour?.has_route ? publicApiTourGpxPath(tripId, tour.place_id, staged?.key) : null,
     tour_type: tour?.tour_type ?? null,
-    distance_m: tour?.tour_distance_km != null ? Math.round(tour.tour_distance_km * 1000) : null,
+    distance_m: staged
+      ? staged.distance_m
+      : tour?.tour_distance_km != null
+        ? Math.round(tour.tour_distance_km * 1000)
+        : null,
+    tour_stage: staged ? { number: staged.number, count: staged.count } : null,
   };
 }
 

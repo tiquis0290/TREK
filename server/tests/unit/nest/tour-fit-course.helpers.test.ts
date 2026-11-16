@@ -15,7 +15,7 @@ import { haversineMetres } from '@trek/shared';
 
 import { describe, expect, it } from 'vitest';
 
-// TOUR-FIT-COURSE-001 to TOUR-FIT-COURSE-013
+// TOUR-FIT-COURSE-001 to TOUR-FIT-COURSE-014
 
 const CREATED_AT = new Date('2026-08-01T06:00:00Z');
 
@@ -65,6 +65,13 @@ describe('thinTrack', () => {
     expect(thinTrack(line, 3)).toEqual([0, 37, 100]);
     // Nothing left off its segment: the line stops short of the cap rather than keep a straight point.
     expect(thinTrack(straight(50), 10)).toEqual([0, 49]);
+  });
+
+  it('TOUR-FIT-COURSE-014: a round tour, which ends where it starts, keeps the point furthest out first', () => {
+    const out = straight(51);
+    const loop = [...out, ...out.slice(0, -1).reverse()];
+    expect(loop[0]).toEqual(loop[loop.length - 1]);
+    expect(thinTrack(loop, 3)).toEqual([0, 50, 100]);
   });
 
   it('TOUR-FIT-COURSE-004: a summit on a straight ridge stays, by its height', () => {

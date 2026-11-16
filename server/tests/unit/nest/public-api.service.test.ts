@@ -35,6 +35,7 @@ function makeService(
     unplannedPlaces?: unknown[];
     accommodations?: unknown[];
     bucketList?: unknown[];
+    endpoints?: unknown[];
   } = {},
 ) {
   const membership = { listAccessibleTripIds: vi.fn().mockResolvedValue(overrides.accessibleIds ?? []) };
@@ -49,6 +50,7 @@ function makeService(
     listUnscheduledForPublicApi: vi.fn().mockResolvedValue(overrides.unscheduledReservations ?? []),
     listUnplannedPlacesForPublicApi: vi.fn().mockResolvedValue(overrides.unplannedPlaces ?? []),
     listAccommodationsForPublicApi: vi.fn().mockResolvedValue(overrides.accommodations ?? []),
+    listEndpointsForPublicApi: vi.fn().mockResolvedValue(overrides.endpoints ?? []),
   };
   const days = { listForPublicApi: vi.fn().mockResolvedValue(overrides.days ?? []) };
   const places = { listAssignedForPublicApi: vi.fn().mockResolvedValue(overrides.assignedPlaces ?? []) };
@@ -124,11 +126,21 @@ describe('PublicApiService', () => {
     ]);
     expect(day.day_notes).toEqual([{ text: 'Bring cash', time: null }]);
     expect(day.reservations).toEqual([
-      { type: null, title: null, location: null, time: null, end_time: null, status: null, notes: null },
+      {
+        type: null,
+        title: null,
+        location: null,
+        time: null,
+        end_time: null,
+        status: null,
+        notes: null,
+        endpoints: [],
+        legs: [],
+      },
     ]);
     // Every key is present on the wire, not just equal to null after a lookup.
     expect(Object.keys(day.places[0]!)).toHaveLength(10);
-    expect(Object.keys(day.reservations[0]!)).toHaveLength(7);
+    expect(Object.keys(day.reservations[0]!)).toHaveLength(9);
   });
 
   it('PUBAPI-SVC-006: an accommodation without dates or details is still listed, every field null', async () => {
@@ -156,5 +168,78 @@ describe('PublicApiService', () => {
     await expect(service.listBucketList(1)).resolves.toEqual([
       { name: 'Lofoten', lat: null, lng: null, country_code: null, notes: null, target_date: null },
     ]);
+  });
+
+  it('PUBAPI-SVC-008: a booking carries its own points and transit legs, on a day and without one', async () => {
+    const metadata = JSON.stringify({
+      transit: {
+        provider: 'motis',
+        legs: [
+          {
+            mode: 'TRAM',
+            line: '4',
+            line_color: '#ff0000',
+            headsign: 'Hlavni nadrazi',
+            agency: 'DPMB',
+            duration: 420,
+            stops: 3,
+            from: { name: 'Mendlovo', time: '08:02', track: null },
+            to: { name: 'Hlavni nadrazi', time: '08:09', track: 'B', lat: 49.19, lng: 16.61 },
+            geometry: null,
+          },
+        ],
+      },
+    });
+    const mendlovo = {
+      reservation_id: 5,
+      role: 'from',
+      name: 'Mendlovo',
+      code: null,
+      lat: 49.2,
+      lng: 16.6,
+      local_date: '2026-06-14',
+      local_time: '08:02',
+    };
+    const prague = { ...mendlovo, reservation_id: 6, role: 'to', name: 'Prague', code: 'PRG', lat: 50.1, lng: 14.26 };
+    const { service, reservations } = makeService({
+      days: [{ id: 70, day_number: 1, date: '2026-06-14' }],
+      scheduledReservations: [{ id: 5, day_id: 70, type: 'transit', metadata }],
+      unscheduledReservations: [{ id: 6, type: 'flight', metadata: '{"airline":"LH"}' }],
+      endpoints: [mendlovo, prague],
+    });
+
+    const trip = await service.getTrip(7, 1, ['reservations']);
+
+    const [tram] = trip?.days?.[0]?.reservations ?? [];
+    expect(tram?.endpoints).toEqual([
+      { name: 'Mendlovo', code: null, lat: 49.2, lng: 16.6, local_date: '2026-06-14', local_time: '08:02' },
+    ]);
+    expect(tram?.legs).toEqual([
+      {
+        mode: 'TRAM',
+        line: '4',
+        headsign: 'Hlavni nadrazi',
+        agency: 'DPMB',
+        duration_s: 420,
+        stops: 3,
+        // Stored without a place: the booking's start places it.
+        from: { name: 'Mendlovo', time: '08:02', track: null, lat: 49.2, lng: 16.6 },
+        to: { name: 'Hlavni nadrazi', time: '08:09', track: 'B', lat: 49.19, lng: 16.61 },
+      },
+    ]);
+    const [flight] = trip?.unscheduled_reservations ?? [];
+    expect(flight?.endpoints).toEqual([
+      { name: 'Prague', code: 'PRG', lat: 50.1, lng: 14.26, local_date: '2026-06-14', local_time: '08:02' },
+    ]);
+    expect(flight?.legs).toEqual([]);
+    // One read of the points for the whole trip, shared by both lists.
+    expect(reservations.listEndpointsForPublicApi).toHaveBeenCalledTimes(1);
+    expect(reservations.listEndpointsForPublicApi).toHaveBeenCalledWith(7);
+  });
+
+  it('PUBAPI-SVC-009: the points are not read when bookings were not asked for', async () => {
+    const { service, reservations } = makeService({ days: [{ id: 70, day_number: 1, date: '2026-06-14' }] });
+    await service.getTrip(7, 1, ['days', 'places']);
+    expect(reservations.listEndpointsForPublicApi).not.toHaveBeenCalled();
   });
 });

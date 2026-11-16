@@ -295,15 +295,21 @@ export function buildTransitReservationParts(
           agency: leg.agency,
           duration: leg.duration,
           stops: leg.intermediateStops,
+          // Each end's place, so a reader can guide the traveller through a change
+          // to the next ride's boarding stop, which no endpoint holds.
           from: {
             name: leg.from.name,
             time: fromTime ? transitLocalParts(fromTime, timezoneFor(leg.from.lat, leg.from.lng)).time : null,
             track: leg.from.track,
+            lat: leg.from.lat,
+            lng: leg.from.lng,
           },
           to: {
             name: leg.to.name,
             time: toTime ? transitLocalParts(toTime, timezoneFor(leg.to.lat, leg.to.lng)).time : null,
             track: leg.to.track,
+            lat: leg.to.lat,
+            lng: leg.to.lng,
           },
           geometry: leg.geometry,
           geometry_precision: leg.geometryPrecision,

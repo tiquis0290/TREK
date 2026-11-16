@@ -16,6 +16,7 @@ import { DayNotes } from '../../src/db/entities/DayNotes.entity';
 import { Days } from '../../src/db/entities/Days.entity';
 import { McpTokens } from '../../src/db/entities/McpTokens.entity';
 import { Places } from '../../src/db/entities/Places.entity';
+import { ReservationEndpoints } from '../../src/db/entities/ReservationEndpoints.entity';
 import { Reservations } from '../../src/db/entities/Reservations.entity';
 import { Trips } from '../../src/db/entities/Trips.entity';
 import { AtlasService } from '../../src/nest/atlas/atlas.service';
@@ -41,6 +42,7 @@ import { createTestMikroOrmModule, createTestOrm, type TestOrm } from '../helper
 import { TestUnitOfWorkModule } from '../helpers/test-uow';
 import { MikroORM } from '@mikro-orm/core';
 import { Test } from '@nestjs/testing';
+import { publicApiReservationSchema } from '@trek/shared';
 
 import type { Server } from 'http';
 import request from 'supertest';
@@ -262,6 +264,75 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
     // Bob's own trip holds a tour Ada must not be able to fetch.
     await insertRow(orm, Places, { id: 32, trip: 2, name: 'Bobs Runde', lat: 1, lng: 2, route_geometry: RIDGE });
     await makeTour(orm, 32);
+    // A journey with a change, as the transit planner saves one: its points in
+    // reservation_endpoints, its legs in metadata. The walk is stored the way
+    // journeys saved before the ends had places are, without lat/lng.
+    const journeyId = await insertRow(orm, Reservations, {
+      trip: 1,
+      day: 2,
+      type: 'transit',
+      title: 'Firenze → Pisa',
+      reservation_time: '2026-06-15T09:00',
+      reservation_end_time: '2026-06-15T10:20',
+      status: 'confirmed',
+      confirmation_number: 'PNR-SECRET',
+      metadata: JSON.stringify({
+        price: { amount: 9.9, currency: 'EUR' },
+        transit: {
+          provider: 'motis',
+          legs: [
+            {
+              mode: 'REGIONAL_RAIL',
+              line: 'R 18',
+              line_color: '#ff0000',
+              line_text_color: '#ffffff',
+              headsign: 'Pisa Centrale',
+              agency: 'Trenitalia',
+              duration: 3600,
+              stops: 6,
+              from: { name: 'Firenze SMN', time: '09:00', track: '8', lat: 43.7764, lng: 11.2479 },
+              to: { name: 'Pisa Centrale', time: '10:00', track: '2', lat: 43.7085, lng: 10.3983 },
+              geometry: '_ibE_seK_seK_seK',
+              geometry_precision: 6,
+            },
+            {
+              mode: 'WALK',
+              line: null,
+              headsign: null,
+              agency: null,
+              duration: 1200,
+              stops: 0,
+              from: { name: 'Pisa Centrale', time: '10:00', track: null },
+              to: { name: 'Torre', time: '10:20', track: null },
+              geometry: null,
+              geometry_precision: 6,
+            },
+          ],
+        },
+      }),
+    });
+    await insertRow(orm, ReservationEndpoints, {
+      reservation: journeyId,
+      role: 'from',
+      sequence: 0,
+      name: 'Firenze SMN',
+      lat: 43.7764,
+      lng: 11.2479,
+      timezone: 'Europe/Rome',
+      local_date: '2026-06-15',
+      local_time: '09:00',
+    });
+    await insertRow(orm, ReservationEndpoints, {
+      reservation: journeyId,
+      role: 'to',
+      sequence: 1,
+      name: 'Torre',
+      lat: 43.723,
+      lng: 10.3966,
+      timezone: 'Europe/Rome',
+      local_date: '2026-06-15',
+      local_time: '10:20',
+    });
 
     app = await build();
     server = app.getHttpServer() as Server;
@@ -377,6 +448,68 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
       });
       expect(first.day_notes).toEqual([{ text: 'Tickets mitnehmen', time: '09:00' }]);
       expect(first.reservations[0]).toMatchObject({ type: 'flight', title: 'LH 1234', status: 'confirmed' });
+    });
+
+    it('gives a transit booking its points and legs in their own public shape', async () => {
+      const res = await get('/api/v1/trips/1?include=reservations', ADA_TOKEN);
+      expect(res.status).toBe(200);
+      const journey = res.body.days[1].reservations[0];
+      expect(publicApiReservationSchema.parse(journey)).toEqual(journey);
+      expect(journey.endpoints).toEqual([
+        { name: 'Firenze SMN', code: null, lat: 43.7764, lng: 11.2479, local_date: '2026-06-15', local_time: '09:00' },
+        { name: 'Torre', code: null, lat: 43.723, lng: 10.3966, local_date: '2026-06-15', local_time: '10:20' },
+      ]);
+      expect(journey.legs).toEqual([
+        {
+          mode: 'REGIONAL_RAIL',
+          line: 'R 18',
+          headsign: 'Pisa Centrale',
+          agency: 'Trenitalia',
+          duration_s: 3600,
+          stops: 6,
+          from: { name: 'Firenze SMN', time: '09:00', track: '8', lat: 43.7764, lng: 11.2479 },
+          to: { name: 'Pisa Centrale', time: '10:00', track: '2', lat: 43.7085, lng: 10.3983 },
+        },
+        {
+          mode: 'WALK',
+          line: null,
+          headsign: null,
+          agency: null,
+          duration_s: 1200,
+          stops: 0,
+          // Stored without places: it starts where the train ends, and ends at the booking's destination.
+          from: { name: 'Pisa Centrale', time: '10:00', track: null, lat: 43.7085, lng: 10.3983 },
+          to: { name: 'Torre', time: '10:20', track: null, lat: 43.723, lng: 10.3966 },
+        },
+      ]);
+    });
+
+    it('keeps the stored journey inside: no line drawing, colours, price, confirmation or internal columns', async () => {
+      const res = await get('/api/v1/trips/1?include=reservations', ADA_TOKEN);
+      const serialised = JSON.stringify(res.body);
+      for (const leak of [
+        'geometry',
+        '_ibE',
+        'line_color',
+        '#ff0000',
+        'price',
+        'PNR-SECRET',
+        'provider',
+        'metadata',
+        'reservation_id',
+        'sequence',
+        'timezone',
+        'Europe/Rome',
+        'role',
+      ]) {
+        expect(serialised).not.toContain(leak);
+      }
+    });
+
+    it('gives every other booking both lists, empty', async () => {
+      const res = await get('/api/v1/trips/1?include=reservations', ADA_TOKEN);
+      expect(res.body.days[0].reservations[0]).toMatchObject({ type: 'flight', endpoints: [], legs: [] });
+      expect(res.body.unscheduled_reservations[0]).toMatchObject({ type: 'flight', endpoints: [], legs: [] });
     });
 
     it('resolves accommodation day ids into ISO dates', async () => {

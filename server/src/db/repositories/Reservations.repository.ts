@@ -14,16 +14,25 @@ import { ROADTRIP_RESERVATION_TYPES } from '@trek/shared';
 import type {
   PublicApiAccommodationKyselyDB,
   PublicApiAccommodationRow,
+  PublicApiEndpointKyselyDB,
+  PublicApiEndpointRow,
   PublicApiReservationKyselyDB,
   PublicApiScheduledReservationRow,
   PublicApiUnplannedPlaceKyselyDB,
   PublicApiUnplannedPlaceRow,
   PublicApiUnscheduledReservationRow,
 } from './reservation-public-api-rows';
+import {
+  endpointsForPublicApiQuery,
+  scheduledForPublicApiQuery,
+  unscheduledForPublicApiQuery,
+} from './_shared/reservation-public-api-queries';
 import type { ReservationAllColumnsRow, ReservationJoinRow } from './reservation-rows';
 
 // The reservation row shapes live in their own module; re-exported so callers keep one import path.
 export type { ReservationAllColumnsRow, ReservationJoinRow } from './reservation-rows';
+// The public API endpoint row type lives in its own module; re-exported so callers keep one import path.
+export type { PublicApiEndpointRow };
 
 /**
  * Kysely typing for the RS18/RR1 join (`joinedQuery` below) — `reservations
@@ -1192,30 +1201,19 @@ export class ReservationsRepository extends TrekRepository<Reservations> {
     return rows.map((r) => r.place_id as number);
   }
 
-  /** `public-api.service.ts::reservationsByDay` (Task 5's `// Task 2` pickup) — see {@link PublicApiScheduledReservationRow}'s docstring. */
-  async listScheduledForPublicApi(trip_id: number): Promise<PublicApiScheduledReservationRow[]> {
-    const rows = await this.kysely<PublicApiReservationKyselyDB>()
-      .selectFrom('reservations')
-      .select(['day_id', 'type', 'title', 'location', 'reservation_time', 'reservation_end_time', 'status', 'notes'])
-      .where('trip_id', '=', trip_id)
-      .where('day_id', 'is not', null)
-      .orderBy('day_id', 'asc')
-      .orderBy('reservation_time', 'asc')
-      .execute();
-    return rows as PublicApiScheduledReservationRow[];
+  /** `public-api.service.ts::reservationsByDay` — see {@link PublicApiScheduledReservationRow}'s docstring. */
+  listScheduledForPublicApi(trip_id: number): Promise<PublicApiScheduledReservationRow[]> {
+    return scheduledForPublicApiQuery(this.kysely<PublicApiReservationKyselyDB>(), trip_id);
   }
 
-  /** `public-api.service.ts::buildUnscheduledReservations` (Task 5's `// Task 2` pickup) — see {@link PublicApiUnscheduledReservationRow}'s docstring. */
-  async listUnscheduledForPublicApi(trip_id: number): Promise<PublicApiUnscheduledReservationRow[]> {
-    const rows = await this.kysely<PublicApiReservationKyselyDB>()
-      .selectFrom('reservations')
-      .select(['type', 'title', 'location', 'reservation_time', 'reservation_end_time', 'status', 'notes'])
-      .where('trip_id', '=', trip_id)
-      .where('day_id', 'is', null)
-      .orderBy('reservation_time', 'asc')
-      .orderBy('id', 'asc')
-      .execute();
-    return rows as PublicApiUnscheduledReservationRow[];
+  /** `public-api.service.ts::buildUnscheduledReservations` — see {@link PublicApiUnscheduledReservationRow}'s docstring. */
+  listUnscheduledForPublicApi(trip_id: number): Promise<PublicApiUnscheduledReservationRow[]> {
+    return unscheduledForPublicApiQuery(this.kysely<PublicApiReservationKyselyDB>(), trip_id);
+  }
+
+  /** `public-api.service.ts::getTrip` — see {@link PublicApiEndpointRow}'s docstring. */
+  listEndpointsForPublicApi(trip_id: number): Promise<PublicApiEndpointRow[]> {
+    return endpointsForPublicApiQuery(this.kysely<PublicApiEndpointKyselyDB>(), trip_id);
   }
 
   /** `public-api.service.ts::buildAccommodations` (Task 5's `// Task 3` pickup) — see {@link PublicApiAccommodationRow}'s docstring. */

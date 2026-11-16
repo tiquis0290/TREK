@@ -9,13 +9,14 @@ import type { BucketListRepository } from '../../db/repositories/BucketList.repo
 import type { DayNotesRepository } from '../../db/repositories/DayNotes.repository';
 import type { DaysRepository } from '../../db/repositories/Days.repository';
 import type { PlacesRepository, PublicApiAssignedPlaceRow } from '../../db/repositories/Places.repository';
-import type { ReservationsRepository } from '../../db/repositories/Reservations.repository';
+import type { PublicApiEndpointRow, ReservationsRepository } from '../../db/repositories/Reservations.repository';
 import type { TripsRepository } from '../../db/repositories/Trips.repository';
 import type { PublicApiTourColumns } from '../../db/repositories/place-public-api-rows';
 import { AddonsService } from '../addons/addons.service';
 import { DomainError } from '../common/domain-error';
 import { TripMembershipService } from '../trip-membership/trip-membership.service';
 import { TOUR_GPX_SOURCE, type TourGpxSource } from './tour-gpx-source.types';
+import { toPublicEndpoints, transitLegsOf } from './public-api.helpers';
 import { InjectRepository } from '@mikro-orm/nestjs';
 import { Inject, Injectable } from '@nestjs/common';
 import { publicApiTourGpxPath } from '@trek/shared';
@@ -100,6 +101,9 @@ export class PublicApiService {
     const trip: PublicApiTrip = toTripSummary(row);
     // Tours are places of the trip; while the addon is off they read as plain places.
     const tours = include.includes('places') && (await this.addons.isAddonEnabled(ADDON_IDS.TOURS));
+    // A booking's points are read once for the whole trip and handed to both
+    // places a booking can be reported, rather than once for each.
+    const endpoints = include.includes('reservations') ? await this.endpointsByReservation(tripId) : new Map();
     // Places, notes and reservations hang off days, so asking for one of them
     // and not for `days` used to return the trip and nothing else — silently,
     // which is the worst way to answer. Days are implied instead.
@@ -109,13 +113,13 @@ export class PublicApiService {
     // through the container those places arrive in. The shell it does get is the
     // join key the children are useless without.
     if (DAY_SCOPED.some((section) => include.includes(section))) {
-      trip.days = await this.buildDays(tripId, include, granted.includes('days'), tours);
+      trip.days = await this.buildDays(tripId, include, granted.includes('days'), tours, endpoints);
     }
     if (include.includes('places')) {
       trip.unplanned_places = await this.buildUnplannedPlaces(tripId, tours);
     }
     if (include.includes('reservations')) {
-      trip.unscheduled_reservations = await this.buildUnscheduledReservations(tripId);
+      trip.unscheduled_reservations = await this.buildUnscheduledReservations(tripId, endpoints);
     }
     if (include.includes('accommodations')) {
       trip.accommodations = await this.buildAccommodations(tripId);
@@ -139,13 +143,16 @@ export class PublicApiService {
     include: PublicApiInclude[],
     dayFields: boolean,
     tours: boolean,
+    endpoints: EndpointsByReservation,
   ): Promise<PublicApiDay[]> {
     const days = await this.daysRepo.listForPublicApi(tripId);
     if (days.length === 0) return [];
 
     const placesByDay = include.includes('places') ? await this.placesByDay(tripId, tours) : new Map();
     const notesByDay = include.includes('notes') ? await this.dayNotesByDay(tripId) : new Map();
-    const reservationsByDay = include.includes('reservations') ? await this.reservationsByDay(tripId) : new Map();
+    const reservationsByDay = include.includes('reservations')
+      ? await this.reservationsByDay(tripId, endpoints)
+      : new Map();
 
     return days.map((day) => ({
       date: day.date,
@@ -199,9 +206,30 @@ export class PublicApiService {
    * repeated on each — a consumer that sees the same flight on three days has no
    * way to tell that from three flights.
    */
-  private async reservationsByDay(tripId: number): Promise<Map<number, PublicApiReservation[]>> {
+  private async reservationsByDay(
+    tripId: number,
+    endpoints: EndpointsByReservation,
+  ): Promise<Map<number, PublicApiReservation[]>> {
     const rows = await this.reservationsRepo.listScheduledForPublicApi(tripId);
-    return groupBy(rows as ReservationRow[], (r: ReservationRow) => r.day_id, toReservation);
+    return groupBy(
+      rows as ReservationRow[],
+      (r: ReservationRow) => r.day_id,
+      (r) => toReservation(r, endpoints),
+    );
+  }
+
+  /**
+   * The points of every booking on the trip, by booking, in travel order. Rows,
+   * not wire shapes: the role is still needed to place a transit leg nothing
+   * else places, and goes no further.
+   */
+  private async endpointsByReservation(tripId: number): Promise<EndpointsByReservation> {
+    const rows = await this.reservationsRepo.listEndpointsForPublicApi(tripId);
+    return groupBy(
+      rows,
+      (r) => r.reservation_id,
+      (r) => r,
+    );
   }
 
   /**
@@ -284,9 +312,12 @@ export class PublicApiService {
    * sets it null rather than cascading, so a flight can outlive the day it was
    * pinned to. Reporting only day-bound bookings would quietly lose those.
    */
-  private async buildUnscheduledReservations(tripId: number): Promise<PublicApiReservation[]> {
+  private async buildUnscheduledReservations(
+    tripId: number,
+    endpoints: EndpointsByReservation,
+  ): Promise<PublicApiReservation[]> {
     const rows = await this.reservationsRepo.listUnscheduledForPublicApi(tripId);
-    return rows.map(toReservation);
+    return rows.map((row) => toReservation(row, endpoints));
   }
 
   /**
@@ -365,7 +396,15 @@ function withPublicTourCode(err: unknown): unknown {
   return err;
 }
 
-function toReservation(row: Omit<ReservationRow, 'day_id'>): PublicApiReservation {
+/** A booking's stored points, keyed by the booking's id, which stays inside. */
+type EndpointsByReservation = Map<number, PublicApiEndpointRow[]>;
+
+/**
+ * A booking on the wire. Its points and transit legs are looked up by its id and
+ * mapped into their own public shapes; the stored metadata never goes out whole.
+ */
+function toReservation(row: Omit<ReservationRow, 'day_id'>, endpoints: EndpointsByReservation): PublicApiReservation {
+  const points = endpoints.get(row.id) ?? [];
   return {
     type: row.type ?? null,
     title: row.title ?? null,
@@ -374,6 +413,8 @@ function toReservation(row: Omit<ReservationRow, 'day_id'>): PublicApiReservatio
     end_time: row.reservation_end_time ?? null,
     status: row.status ?? null,
     notes: row.notes ?? null,
+    endpoints: toPublicEndpoints(points),
+    legs: transitLegsOf(row.metadata ?? null, points, `reservation ${row.id}`),
   };
 }
 
@@ -441,6 +482,7 @@ interface DayNoteRow {
 }
 
 interface ReservationRow {
+  id: number;
   day_id: number;
   type: string | null;
   title: string | null;
@@ -449,6 +491,7 @@ interface ReservationRow {
   reservation_end_time: string | null;
   status: string | null;
   notes: string | null;
+  metadata: string | null;
 }
 
 interface AccommodationRow {

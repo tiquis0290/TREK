@@ -92,6 +92,19 @@ export class PlaceImportService {
     return this.gpx.tourFilename(tourName);
   }
 
+  /**
+   * The points of a tour's saved line exactly as its GPX export reads them, for
+   * the FIT course Tours writes from the same line. `ele` is null where the line
+   * has no height.
+   */
+  readTourTrack(routeGeometry: string | null): Array<{ lat: number; lng: number; ele: number | null }> {
+    return this.gpx.readTourTrack(routeGeometry);
+  }
+
+  tourFitFilename(tourName: string): string {
+    return this.gpx.tourFitFilename(tourName);
+  }
+
   /** A list file as GPX (#2301). */
   writeCollectionGpx(file: ExportedCollectionFile): CollectionGpxExport {
     return this.collectionGpx.write(file);

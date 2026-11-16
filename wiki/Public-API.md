@@ -99,7 +99,7 @@ Pick what you need with `?include=`, comma-separated:
 | `days` | the itinerary spine: one entry per day, with `date`, `day_number`, `title`, `notes` |
 | `places` | stops on each day, **in planned order**, with coordinates, times, duration, category and transport mode |
 | `notes` | timed free-text notes on a day |
-| `reservations` | bookings on their starting day: type, title, location, time, status |
+| `reservations` | bookings on their starting day: type, title, location, time, status, and for transport the points and transit legs (see [Bookings: points and legs](#bookings-points-and-legs)) |
 | `accommodations` | where you sleep, with the date range resolved and check-in/check-out times |
 | `travellers` | who is on the trip, by display name |
 
@@ -147,7 +147,14 @@ curl -H "Authorization: Bearer trek_…" \
       "reservations": [
         { "type": "flight", "title": "LH 1234", "location": "FRA",
           "time": "2026-06-14T08:00", "end_time": null,
-          "status": "confirmed", "notes": null }
+          "status": "confirmed", "notes": null,
+          "endpoints": [
+            { "name": "Frankfurt", "code": "FRA", "lat": 50.0379, "lng": 8.5622,
+              "local_date": "2026-06-14", "local_time": "08:00" },
+            { "name": "Florence", "code": "FLR", "lat": 43.81, "lng": 11.2051,
+              "local_date": "2026-06-14", "local_time": "09:35" }
+          ],
+          "legs": [] }
       ]
     }
   ],
@@ -159,6 +166,36 @@ curl -H "Authorization: Bearer trek_…" \
   "travellers": [{ "name": "ada", "owner": true }, { "name": "bob", "owner": false }]
 }
 ```
+
+#### Bookings: points and legs
+
+Every booking, on a day or in `unscheduled_reservations`, has two more lists. They are always there and empty when there is nothing to put in them.
+
+`endpoints` holds the points of a transport booking (flight, train, bus, transit …) in travel order: where it starts, each change on the way, where it ends.
+
+```json
+{ "name": "Brno hl.n.", "code": null, "lat": 49.1906, "lng": 16.6128,
+  "local_date": "2026-06-14", "local_time": "08:28" }
+```
+
+`code` is an airport's IATA code or a station's code when the booking has one. The date and time are local to the point, as the traveller reads them off a departure board, and a change carries the time the journey leaves it again.
+
+`legs` holds the legs of a public transport journey planned in TREK (`type: "transit"`), walks included, in travel order:
+
+```json
+{ "mode": "LONG_DISTANCE", "line": "EC 278", "headsign": "Praha hl.n.", "agency": "České dráhy",
+  "duration_s": 8880, "stops": 2,
+  "from": { "name": "Brno hl.n.", "time": "08:28", "track": "3", "lat": 49.1906, "lng": 16.6128 },
+  "to":   { "name": "Praha hl.n.", "time": "10:56", "track": "5", "lat": 50.0831, "lng": 14.4348 } }
+```
+
+- `mode` is the journey planner's word (`WALK`, `BUS`, `TRAM`, `SUBWAY`, `REGIONAL_RAIL`, `LONG_DISTANCE` …), passed through unmapped. A walk has no `line`.
+- `duration_s` is in seconds, `stops` counts the stops between boarding and getting off, and `from.time`/`to.time` are local `HH:MM`, like the endpoints'.
+- `from` and `to` also say where the stop is (`lat`, `lng`), so a change can be walked: from the stop one ride leaves you at to the platform the next one leaves from, which is not among the `endpoints`. Journeys planned from this version on store that place. For older journeys TREK takes the matching end of the leg's line, else (often for a walk) the end of the leg before it or the start of the leg after it, else, for the first and last leg, the booking's own start and destination. An end nothing places has `lat` and `lng` `null`, and any other field TREK does not know is `null` as well.
+
+Both lists are built field by field into the shape above. What TREK keeps beside a journey for its own use (the drawn line, the line's colours, the price, the confirmation number) is not part of the payload.
+
+With both lists, the next change of a journey is a lookup: the first leg whose `from.time` is still ahead names the stop, the line, the track and where to go.
 
 ### `GET /api/v1/bucket-list`
 

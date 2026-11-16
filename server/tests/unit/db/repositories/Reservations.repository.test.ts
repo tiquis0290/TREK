@@ -933,7 +933,7 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
     const legacy = testDb
       .prepare(
         `
-      SELECT day_id, type, title, location, reservation_time, reservation_end_time, status, notes
+      SELECT day_id, id, type, title, location, reservation_time, reservation_end_time, status, notes, metadata
       FROM reservations WHERE trip_id = ? AND day_id IS NOT NULL
       ORDER BY day_id ASC, reservation_time ASC`,
       )
@@ -942,6 +942,7 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
     const typed = await reservationsRepo.listScheduledForPublicApi(trip.id);
     expect(typed).toEqual(legacy);
     expect(typed.length).toBe(1);
+    expect(typed[0]).toMatchObject({ id: scheduled.id, metadata: null });
   });
 
   it('listUnscheduledForPublicApi — matches the legacy statement, day_id IS NULL only', async () => {
@@ -956,7 +957,7 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
     const legacy = testDb
       .prepare(
         `
-      SELECT type, title, location, reservation_time, reservation_end_time, status, notes
+      SELECT id, type, title, location, reservation_time, reservation_end_time, status, notes, metadata
       FROM reservations WHERE trip_id = ? AND day_id IS NULL
       ORDER BY reservation_time ASC, id ASC`,
       )
@@ -965,6 +966,46 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
     const typed = await reservationsRepo.listUnscheduledForPublicApi(trip.id);
     expect(typed).toEqual(legacy);
     expect(typed.map((r) => r.title)).toEqual(['Unscheduled']);
+  });
+
+  it('listEndpointsForPublicApi — every point of the trip, per booking in travel order, no other trip', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const other = createTrip(testDb, user.id);
+    const journey = createReservation(testDb, trip.id, { title: 'Journey', type: 'transit' });
+    const flight = createReservation(testDb, trip.id, { title: 'Flight', type: 'flight' });
+    const elsewhere = createReservation(testDb, other.id, { title: 'Elsewhere', type: 'train' });
+    // Inserted out of order: the sequence decides.
+    await insertReservationEndpoint(journey.id, 'to', 2, { name: 'Praha', local_time: '10:56' });
+    await insertReservationEndpoint(journey.id, 'from', 0, { name: 'Brno', local_date: '2026-08-01' });
+    await insertReservationEndpoint(journey.id, 'stop', 1, {
+      name: 'Pardubice',
+      code: 'PCE',
+      timezone: 'Europe/Prague',
+    });
+    await insertReservationEndpoint(flight.id, 'from', 0, { name: 'FRA' });
+    await insertReservationEndpoint(elsewhere.id, 'from', 0, { name: 'Not this trip' });
+
+    const rows = await reservationsRepo.listEndpointsForPublicApi(trip.id);
+
+    expect(rows.map((r) => [r.reservation_id, r.role, r.name])).toEqual([
+      [journey.id, 'from', 'Brno'],
+      [journey.id, 'stop', 'Pardubice'],
+      [journey.id, 'to', 'Praha'],
+      [flight.id, 'from', 'FRA'],
+    ]);
+    // Exactly these columns: the row id, the sequence and the timezone stay in the table.
+    expect(rows[1]).toEqual({
+      reservation_id: journey.id,
+      role: 'stop',
+      name: 'Pardubice',
+      code: 'PCE',
+      lat: 48,
+      lng: 11,
+      local_date: null,
+      local_time: null,
+    });
+    expect(await reservationsRepo.listEndpointsForPublicApi(other.id + 1000)).toEqual([]);
   });
 
   it('listAccommodationsForPublicApi — matches the legacy LEFT JOIN statement, ordered by start date', async () => {

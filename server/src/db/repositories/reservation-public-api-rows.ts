@@ -8,11 +8,14 @@ import type { DB } from '../kysely/db';
 
 /**
  * `public-api.service.ts::reservationsByDay` (Task 5's `// Task 2` pickup)
- * — `SELECT day_id, type, title, location, reservation_time,
- * reservation_end_time, status, notes FROM reservations WHERE trip_id = ?
- * AND day_id IS NOT NULL ORDER BY day_id ASC, reservation_time ASC`.
+ * — `SELECT id, day_id, type, title, location, reservation_time,
+ * reservation_end_time, status, notes, metadata FROM reservations WHERE
+ * trip_id = ? AND day_id IS NOT NULL ORDER BY day_id ASC, reservation_time
+ * ASC`. `id` joins the booking's endpoints and stays inside; `metadata` is
+ * read for the transit legs and never handed out whole.
  */
 export interface PublicApiScheduledReservationRow {
+  id: number;
   day_id: number;
   type: string | null;
   title: string | null;
@@ -21,16 +24,39 @@ export interface PublicApiScheduledReservationRow {
   reservation_end_time: string | null;
   status: string | null;
   notes: string | null;
+  metadata: string | null;
 }
 
 /**
  * `public-api.service.ts::buildUnscheduledReservations` (Task 5's `// Task
- * 2` pickup) — the same 7 columns minus `day_id`, `WHERE trip_id = ? AND
+ * 2` pickup) — the same columns minus `day_id`, `WHERE trip_id = ? AND
  * day_id IS NULL ORDER BY reservation_time ASC, id ASC`.
  */
 export type PublicApiUnscheduledReservationRow = Omit<PublicApiScheduledReservationRow, 'day_id'>;
 
 export type PublicApiReservationKyselyDB = Pick<DB, 'reservations'>;
+
+/**
+ * `public-api.service.ts::getTrip` — `SELECT e.reservation_id, e.role,
+ * e.name, e.code, e.lat, e.lng, e.local_date, e.local_time FROM
+ * reservation_endpoints e JOIN reservations r ON r.id = e.reservation_id
+ * WHERE r.trip_id = ? ORDER BY e.reservation_id ASC, e.sequence ASC, e.id
+ * ASC`: the points of every booking on the trip, in travel order.
+ * `reservation_id` and `role` are read for grouping and placing transit legs
+ * and are not part of the public shape.
+ */
+export interface PublicApiEndpointRow {
+  reservation_id: number;
+  role: string;
+  name: string;
+  code: string | null;
+  lat: number;
+  lng: number;
+  local_date: string | null;
+  local_time: string | null;
+}
+
+export type PublicApiEndpointKyselyDB = Pick<DB, 'reservation_endpoints' | 'reservations'>;
 
 /**
  * `public-api.service.ts::buildAccommodations` (Task 5's `// Task 3`

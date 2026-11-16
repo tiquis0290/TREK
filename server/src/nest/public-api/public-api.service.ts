@@ -258,12 +258,22 @@ export class PublicApiService {
    * branch on; every other error passes as it is.
    */
   async getTourGpx(tripId: number, placeId: number, userId: number): Promise<{ gpx: string; filename: string } | null> {
+    return this.readTourFile(tripId, userId, () => this.tourGpx.export(String(tripId), String(placeId)));
+  }
+
+  /** The same tour as a FIT course for a watch, under every rule of {@link getTourGpx}. */
+  async getTourFit(tripId: number, placeId: number, userId: number): Promise<{ fit: Buffer; filename: string } | null> {
+    return this.readTourFile(tripId, userId, () => this.tourGpx.exportFit(String(tripId), String(placeId)));
+  }
+
+  /** The checks every tour file passes before `read` writes it, and the public code on its refusal. */
+  private async readTourFile<T>(tripId: number, userId: number, read: () => Promise<T>): Promise<T | null> {
     if (!(await this.addons.isAddonEnabled(ADDON_IDS.TOURS))) {
       throw new DomainError(404, 'Tours addon is not enabled');
     }
     if (!(await this.tripsRepo.findAccessible(tripId, userId))) return null;
     try {
-      return await this.tourGpx.export(String(tripId), String(placeId));
+      return await read();
     } catch (err) {
       throw withPublicTourCode(err);
     }

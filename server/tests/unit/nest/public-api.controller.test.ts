@@ -220,6 +220,37 @@ describe('PublicApiController', () => {
     });
   });
 
+  describe('GET /api/v1/trips/:id/tours/:placeId/fit', () => {
+    const fakeRes = () => ({ setHeader: vi.fn(), send: vi.fn() });
+
+    it('sends the export as a FIT download, for the caller the guard resolved', async () => {
+      const fit = Buffer.from([14, 0x20]);
+      const getTourFit = vi.fn().mockResolvedValue({ fit, filename: 'Ridge.fit' });
+      const res = fakeRes();
+      await makeController({ getTourFit }).getTourFit(req(7), '12', '40', res as unknown as Response);
+      expect(getTourFit).toHaveBeenCalledWith(12, 40, 7);
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/vnd.ant.fit');
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('Ridge.fit'));
+      expect(res.send).toHaveBeenCalledWith(fit);
+    });
+
+    it('404s a trip the caller may not read, 400s a malformed id and 429s a spent budget, as the GPX does', async () => {
+      const getTourFit = vi.fn().mockResolvedValue(null);
+      const res = fakeRes() as unknown as Response;
+      expect(await thrownAsync(() => makeController({ getTourFit }).getTourFit(req(7), '12', '40', res))).toEqual({
+        status: 404,
+        body: { error: 'Trip not found' },
+      });
+      expect(await thrownAsync(() => makeController({ getTourFit }).getTourFit(req(7), '12', 'x', res))).toEqual({
+        status: 400,
+        body: { error: 'Invalid tour id' },
+      });
+      const spent = makeController({ getTourFit }, false);
+      expect((await thrownAsync(() => spent.getTourFit(req(7), '12', '40', res))).status).toBe(429);
+      expect(getTourFit).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('rate limiting', () => {
     it('429s the list once the budget is spent, without reaching the service', async () => {
       const listTrips = vi.fn();

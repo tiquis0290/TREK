@@ -10,7 +10,7 @@ Read trips. That is deliberate and complete:
 
 - list the trips you own or are a member of
 - fetch one trip with its days, places in planned order, day notes, reservations, accommodations and fellow travellers
-- download a tour's route as GPX, the same file TREK's own export writes
+- download a tour's route as GPX, the same file TREK's own export writes, or as a FIT course for a Garmin watch
 - read the bucket list: places the traveller wants to reach, not tied to any trip
 - read a handful of totals for a dashboard widget: trips, countries, cities, places, days, flown distance, and the last trip taken
 
@@ -53,7 +53,7 @@ A key can be narrowed when you create it, to any subset of:
 
 `trips` · `days` · `places` · `notes` · `reservations` · `accommodations` · `travellers` · `bucket-list` · `stats`
 
-This is **not** the same as `include`. `include` chooses which sections a response carries and any key may ask for any of them; this decides what the key may see at all, and the server refuses the rest with a `403`. `trips` is the entry ticket for every trip endpoint: without it, every call to `/api/v1/trips`, `/api/v1/trips/{id}` and a tour's GPX is a `403` with `required_scope: "trips"`, whatever else the key was given. The other areas only trim what a trip brings along. A key given `trips`, `days` and `notes` reads exactly that, however it asks.
+This is **not** the same as `include`. `include` chooses which sections a response carries and any key may ask for any of them; this decides what the key may see at all, and the server refuses the rest with a `403`. `trips` is the entry ticket for every trip endpoint: without it, every call to `/api/v1/trips`, `/api/v1/trips/{id}` and a tour's GPX or FIT file is a `403` with `required_scope: "trips"`, whatever else the key was given. The other areas only trim what a trip brings along. A key given `trips`, `days` and `notes` reads exactly that, however it asks.
 
 Two rules make it predictable:
 
@@ -185,7 +185,7 @@ A tour (a hike, a ride, a paddle, a city walk …) is a place of the trip, so it
 | `tour_type` | the kind of tour in TREK's own words, passed through rather than mapped: today `hike`, `bike`, `run`, `ski`, `kayak` (any paddle tour), `walk` (a city walk), `food` and `horse`. New kinds may appear; treat an unknown one as a generic tour. |
 | `distance_m` | the tour's length in whole metres, when TREK knows it |
 
-While the **Tours** addon is switched off, all three are `null` on every place and the GPX route answers `404`, as TREK's own export does.
+While the **Tours** addon is switched off, all three are `null` on every place and the GPX and FIT routes answer `404`, as TREK's own export does.
 
 ### `GET /api/v1/trips/{id}/tours/{placeId}/gpx`
 
@@ -204,6 +204,25 @@ It needs the `trips` and the `places` scope (a tour is a place) and counts again
 ```bash
 curl -H "Authorization: Bearer trek_…" -o ridge.gpx \
      "https://trek.example.com/api/v1/trips/12/tours/57/gpx"
+```
+
+### `GET /api/v1/trips/{id}/tours/{placeId}/fit`
+
+The same route as a **FIT course** (`Content-Type: application/vnd.ant.fit`, a file name ending in `.fit`), for a Garmin watch: a watch takes a downloaded course only as FIT, never as GPX. There is no field for it on a place: wherever a place has a `gpx_url`, the same path ending in `/fit` instead of `/gpx` serves the course.
+
+The course is built from the same line as the GPX:
+
+- every point keeps its position and its height where the line has one;
+- a long line is **thinned to at most 2,000 points**, to keep the course small enough for a watch. The points kept are the ones where the route bends or climbs (Douglas–Peucker), so the shape stays within a few metres. Distances are measured over the whole line, so the course is as long as the GPX;
+- the trip's places along the tour (the GPX file's waypoints) become **course points** at the spot the route passes them;
+- the tour's kind becomes the FIT sport (hiking, walking, running, cycling, skiing, paddling, horseback riding, otherwise generic);
+- a course carries times for the watch's virtual partner: the tour's planned moving time spread along it, or without one a steady pace for its kind, starting when the file is downloaded.
+
+Scopes, rate limit and every status are exactly those of the GPX route above, including `422` with `code: "tour_without_route"` for a tour without a line.
+
+```bash
+curl -H "Authorization: Bearer trek_…" -o ridge.fit \
+     "https://trek.example.com/api/v1/trips/12/tours/57/fit"
 ```
 
 ### `GET /api/v1/bucket-list`
@@ -297,7 +316,7 @@ A Homepage widget then needs no scripting:
 | `400` | malformed trip or tour id, or an unknown `include` section |
 | `401` | missing, malformed or unknown key — also what you get for a key of the wrong kind |
 | `403` | the key is valid but not allowed to read what was asked for (`code: "API_SCOPE_FORBIDDEN"`, with the missing section in `required_scope`) |
-| `404` | no such trip, or not one of yours; no such tour on the trip; the Tours addon is off (GPX route) |
+| `404` | no such trip, or not one of yours; no such tour on the trip; the Tours addon is off (GPX and FIT routes) |
 | `422` | the tour has no route to export (`code: "tour_without_route"`) |
 | `429` | rate limit exceeded |
 

@@ -132,20 +132,56 @@ export class PublicApiController {
     @Param('placeId') placeId: string,
     @Res() res: Response,
   ): Promise<void> {
+    const { tripId, tourId, userId } = await this.tourFileRequest(req, id, placeId);
+    const file = await this.api.getTourGpx(tripId, tourId, userId);
+    sendTourFile(res, file && { body: file.gpx, filename: file.filename }, 'application/gpx+xml; charset=utf-8');
+  }
+
+  /**
+   * The same route as a FIT course, the only form a Garmin watch takes a
+   * downloaded course in (a watch app cannot save a GPX). Built from the same
+   * line as the GPX, thinned to at most 2,000 points, the trip's places along it
+   * as course points. No field of its own on a place: it sits beside the
+   * place's `gpx_url`, under every rule of the GPX route above.
+   *
+   * response-contract-exempt: a file download written through @Res(), not a JSON body.
+   */
+  @Get('trips/:id/tours/:placeId/fit')
+  async getTourFit(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('placeId') placeId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { tripId, tourId, userId } = await this.tourFileRequest(req, id, placeId);
+    const file = await this.api.getTourFit(tripId, tourId, userId);
+    sendTourFile(res, file && { body: file.fit, filename: file.filename }, 'application/vnd.ant.fit');
+  }
+
+  /** What every tour file checks first: the rate limit, the trips and places scopes and the two ids. */
+  private async tourFileRequest(req: Request, id: string, placeId: string) {
     await this.limit(req);
     requireScope(req, 'trips');
     requireScope(req, 'places');
-    const tripId = parseTripId(id);
-    const tourId = parsePositiveId(placeId, 'Invalid tour id');
-
-    const file = await this.api.getTourGpx(tripId, tourId, requireUserId(req));
-    if (!file) {
-      throw new HttpException({ error: 'Trip not found' }, 404);
-    }
-    res.setHeader('Content-Type', 'application/gpx+xml; charset=utf-8');
-    res.setHeader('Content-Disposition', contentDisposition(file.filename, 'attachment'));
-    res.send(file.gpx);
+    return {
+      tripId: parseTripId(id),
+      tourId: parsePositiveId(placeId, 'Invalid tour id'),
+      userId: requireUserId(req),
+    };
   }
+}
+
+/**
+ * A tour file as a download, or the trip route's 404 when the caller may not
+ * read the trip (null), so a tour id cannot probe someone else's trips.
+ */
+function sendTourFile(res: Response, file: { body: string | Buffer; filename: string } | null, contentType: string) {
+  if (!file) {
+    throw new HttpException({ error: 'Trip not found' }, 404);
+  }
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', contentDisposition(file.filename, 'attachment'));
+  res.send(file.body);
 }
 
 /**

@@ -24,13 +24,6 @@ import type { ReservationAllColumnsRow, ReservationJoinRow } from './reservation
 
 // The reservation row shapes live in their own module; re-exported so callers keep one import path.
 export type { ReservationAllColumnsRow, ReservationJoinRow } from './reservation-rows';
-// The public API row types moved to their own module; re-exported so callers keep one import path.
-export type {
-  PublicApiAccommodationRow,
-  PublicApiScheduledReservationRow,
-  PublicApiUnplannedPlaceRow,
-  PublicApiUnscheduledReservationRow,
-};
 
 /**
  * Kysely typing for the RS18/RR1 join (`joinedQuery` below) — `reservations
@@ -1244,9 +1237,11 @@ export class ReservationsRepository extends TrekRepository<Reservations> {
     const rows = await this.kysely<PublicApiUnplannedPlaceKyselyDB>()
       .selectFrom('places as p')
       .leftJoin('categories as c', 'c.id', 'p.category_id')
+      .leftJoin('tours as t', 't.place_id', 'p.id')
       .select((eb) => [
         'p.name', 'p.address', 'p.lat', 'p.lng', 'p.place_time', 'p.end_time',
         'p.duration_minutes', 'p.notes', 'p.transport_mode', 'c.name as category',
+        'p.id as place_id', 't.tour_type', 't.distance as tour_distance_km', eb('p.route_geometry', 'is not', null).as('has_route'),
       ])
       .where('p.trip_id', '=', trip_id)
       .where((eb) => eb.not(eb.exists(eb.selectFrom('day_assignments as da').select('da.id').whereRef('da.place_id', '=', 'p.id'))))

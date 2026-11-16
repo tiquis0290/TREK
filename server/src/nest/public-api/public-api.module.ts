@@ -4,6 +4,7 @@ import { Days } from '../../db/entities/Days.entity';
 import { Places } from '../../db/entities/Places.entity';
 import { Reservations } from '../../db/entities/Reservations.entity';
 import { Trips } from '../../db/entities/Trips.entity';
+import { AddonsModule } from '../addons/addons.module';
 import { RateLimitModule } from '../common/rate-limit.module';
 import { TokensModule } from '../tokens/tokens.module';
 import { TripMembershipModule } from '../trip-membership/trip-membership.module';
@@ -26,6 +27,11 @@ import { Module } from '@nestjs/common';
  * which reads app_settings on init. A read-only surface that cannot start without
  * half the application is one that breaks for reasons it has nothing to do with.
  *
+ * AddonsModule is the one domain module taken in, because it is a leaf: whether
+ * the Tours addon is on decides whether a place reads as a tour. A tour's GPX
+ * file comes through the `TOUR_GPX_SOURCE` port (`tour-gpx-source.types.ts`),
+ * which Tours binds globally, for the reason above.
+ *
  * That constraint is why `GET /api/v1/stats` is not declared here: its figures are
  * AtlasService's, so the route lives in `atlas/` instead and provides this guard
  * class itself. No module edge either way — which is the point.
@@ -47,6 +53,7 @@ import { Module } from '@nestjs/common';
     TokensModule,
     TripMembershipModule,
     RateLimitModule,
+    AddonsModule,
     MikroOrmModule.forFeature([Trips, Reservations, Days, Places, DayNotes, BucketList]),
   ],
   controllers: [PublicApiController],

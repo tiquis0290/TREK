@@ -10,6 +10,7 @@
 import { DayAccommodations } from '../../../../src/db/entities/DayAccommodations.entity';
 import { DayAssignments } from '../../../../src/db/entities/DayAssignments.entity';
 import { Days } from '../../../../src/db/entities/Days.entity';
+import { Places } from '../../../../src/db/entities/Places.entity';
 import { ReservationDayPositions } from '../../../../src/db/entities/ReservationDayPositions.entity';
 import { ReservationEndpoints } from '../../../../src/db/entities/ReservationEndpoints.entity';
 import { Reservations } from '../../../../src/db/entities/Reservations.entity';
@@ -30,6 +31,7 @@ import {
   addTripMember,
 } from '../../../helpers/factories';
 import { findRow, findRows, insertRow, updateRows } from '../../../helpers/factories/rows';
+import { makeTour } from '../../../helpers/factories/tours';
 import { resetTestDb } from '../../../helpers/test-db';
 import {
   createTestReservationsRepo,
@@ -1005,13 +1007,17 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
     createDayAssignment(testDb, days[0].id, assigned.id);
     const staying = createPlace(testDb, trip.id, { name: 'Hotel' });
     createDayAccommodation(testDb, trip.id, staying.id, days[0].id, days[1].id);
+    // The unplanned place is a hike with a line, so the tour columns carry values.
+    await updateRows(await orm(), Places, { id: unplanned.id }, { route_geometry: '[[47.4,10.9],[47.5,11]]' });
+    await makeTour(await orm(), unplanned.id, { distance: 4.25 });
 
     // test-sql-allow: the legacy statement is the oracle the repository read is held to.
     const legacy = testDb
       .prepare(
         `
-      SELECT p.name, p.address, p.lat, p.lng, p.place_time, p.end_time, p.duration_minutes, p.notes, p.transport_mode, c.name as category
-      FROM places p LEFT JOIN categories c ON c.id = p.category_id
+      SELECT p.name, p.address, p.lat, p.lng, p.place_time, p.end_time, p.duration_minutes, p.notes, p.transport_mode, c.name as category,
+        p.id AS place_id, t.tour_type, t.distance AS tour_distance_km, p.route_geometry IS NOT NULL AS has_route
+      FROM places p LEFT JOIN categories c ON c.id = p.category_id LEFT JOIN tours t ON t.place_id = p.id
       WHERE p.trip_id = ?
         AND NOT EXISTS (SELECT 1 FROM day_assignments da WHERE da.place_id = p.id)
         AND NOT EXISTS (SELECT 1 FROM day_accommodations a WHERE a.place_id = p.id)
@@ -1022,6 +1028,7 @@ describe('ReservationsRepository — public-api.service.ts reads', () => {
     const typed = await reservationsRepo.listUnplannedPlacesForPublicApi(trip.id);
     expect(typed).toEqual(legacy);
     expect(typed.map((p) => p.name)).toEqual([unplanned.name]);
+    expect(typed[0]).toMatchObject({ place_id: unplanned.id, tour_type: 'hike', tour_distance_km: 4.25, has_route: 1 });
   });
 });
 

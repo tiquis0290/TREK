@@ -4,12 +4,16 @@ import { absDifference, coalesceParam, columnRef, currentTimestamp, lowerTrim } 
 import { type AssertRowKeys } from './_shared/rows';
 import { TrekRepository } from './_shared/trek-repository';
 import { tourPlaceTextPatch, type TourPlaceWrite } from './tour-place-write';
+import type { PublicApiAssignedPlaceRow, PublicApiAssignedPlacesKyselyDB } from './place-public-api-rows';
 // Task 9 fix wave (B-L2): `TagRow` is Tags.repository.ts's own row type,
 // byte-identical to what used to be hand-mirrored here — a second
 // declaration of the same shape is exactly the duplication Sonar flags and
 // the program's "single source of truth" rule (root CLAUDE.md) forbids.
 import type { TagRow } from './Tags.repository';
 import type { DB } from '../kysely/db';
+
+// The public API's place row lives in its own module; re-exported so callers keep one import path.
+export type { PublicApiAssignedPlaceRow } from './place-public-api-rows';
 
 /** A `places` row as the API emits it — every scalar column of the entity. */
 export interface PlaceRow {
@@ -1301,7 +1305,9 @@ export class PlacesRepository extends TrekRepository<Places> {
    * p.end_time, p.duration_minutes, p.notes, p.transport_mode, c.name AS
    * category FROM day_assignments da JOIN places p ON p.id = da.place_id
    * LEFT JOIN categories c ON c.id = p.category_id WHERE p.trip_id = ? AND
-   * da.accommodation_id IS NULL ORDER BY da.day_id ASC, da.order_index ASC`.
+   * da.accommodation_id IS NULL ORDER BY da.day_id ASC, da.order_index ASC`,
+   * plus the tour columns of `LEFT JOIN tours t ON t.place_id = p.id`
+   * ({@link PublicApiTourColumns}).
    * Kysely — the SAME cross-table-read escape hatch `ReservationsRepository
    * .listUnplannedPlacesForPublicApi`'s precedent (3d Task 4) uses for this
    * exact `public-api.service.ts` surface; landed on `PlacesRepository`
@@ -1313,10 +1319,12 @@ export class PlacesRepository extends TrekRepository<Places> {
       .selectFrom('day_assignments as da')
       .innerJoin('places as p', 'p.id', 'da.place_id')
       .leftJoin('categories as c', 'c.id', 'p.category_id')
-      .select([
+      .leftJoin('tours as t', 't.place_id', 'p.id')
+      .select((eb) => [
         'da.day_id',
         'p.name', 'p.address', 'p.lat', 'p.lng', 'p.place_time', 'p.end_time',
         'p.duration_minutes', 'p.notes', 'p.transport_mode', 'c.name as category',
+        'p.id as place_id', 't.tour_type', 't.distance as tour_distance_km', eb('p.route_geometry', 'is not', null).as('has_route'),
       ])
       .where('p.trip_id', '=', trip_id)
       .where('da.accommodation_id', 'is', null)
@@ -1369,21 +1377,6 @@ export class PlacesRepository extends TrekRepository<Places> {
     return updated > 0;
   }
 }
-
-/** The `places` columns {@link PlacesRepository.listAssignedForPublicApi} selects, typed off {@link PlaceRow}. */
-type PublicApiPlaceColumns = Pick<
-  PlaceRow,
-  'name' | 'address' | 'lat' | 'lng' | 'place_time' | 'end_time' | 'duration_minutes' | 'notes' | 'transport_mode'
->;
-
-/** {@link PlacesRepository.listAssignedForPublicApi}'s projection. */
-export interface PublicApiAssignedPlaceRow extends PublicApiPlaceColumns {
-  day_id: number;
-  category: string | null;
-}
-
-/** {@link PlacesRepository.listAssignedForPublicApi}'s `day_assignments`/`places`/`categories` tables. */
-type PublicApiAssignedPlacesKyselyDB = Pick<DB, 'day_assignments' | 'places' | 'categories'>;
 
 /** {@link PlacesRepository.listImportable}'s row shape (CL45). */
 export interface ImportablePlaceRow {

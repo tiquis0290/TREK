@@ -58,7 +58,7 @@ import { TourDetailsService } from './tour-details.service';
 import { TourDraftsController } from './tour-drafts.controller';
 import { TourDraftsService } from './tour-drafts.service';
 import { TourEditMcp } from './tour-edit.mcp';
-import { TourGpxExportService } from './tour-gpx-export.service';
+import { TourGpxExportModule } from './tour-gpx-export.module';
 import { TourHorseRoutesController } from './tour-horse-routes.controller';
 import { TourHorseRoutesService } from './tour-horse-routes.service';
 import { TourLibraryController, TourTakeOverController } from './tour-library.controller';
@@ -144,6 +144,8 @@ import { Module } from '@nestjs/common';
   imports: [
     PlacesModule,
     PlaceImportModule,
+    // PR1-06A: the GPX file of a saved tour, which the public API serves too.
+    TourGpxExportModule,
     PermissionsModule,
     TripMembershipModule,
     // The take-over tool checks 'place_edit' on the trip it writes into (LIB-02).
@@ -219,7 +221,6 @@ import { Module } from '@nestjs/common';
     PaddleCheckCache,
     TourPaddleCheckService,
     TourObstacleReviewsService,
-    TourGpxExportService,
     TourHorseRoutesService,
     ToursWandererService,
     TourLibraryService,

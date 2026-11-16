@@ -10,6 +10,7 @@ Read trips. That is deliberate and complete:
 
 - list the trips you own or are a member of
 - fetch one trip with its days, places in planned order, day notes, reservations, accommodations and fellow travellers
+- download a tour's route as GPX, the same file TREK's own export writes
 - read the bucket list: places the traveller wants to reach, not tied to any trip
 - read a handful of totals for a dashboard widget: trips, countries, cities, places, days, flown distance, and the last trip taken
 
@@ -52,7 +53,7 @@ A key can be narrowed when you create it, to any subset of:
 
 `trips` · `days` · `places` · `notes` · `reservations` · `accommodations` · `travellers` · `bucket-list` · `stats`
 
-This is **not** the same as `include`. `include` chooses which sections a response carries and any key may ask for any of them; this decides what the key may see at all, and the server refuses the rest with a `403`. `trips` is the entry ticket for both trip endpoints: without it, every call to `/api/v1/trips` and `/api/v1/trips/{id}` is a `403` with `required_scope: "trips"`, whatever else the key was given. The other areas only trim what a trip brings along. A key given `trips`, `days` and `notes` reads exactly that, however it asks.
+This is **not** the same as `include`. `include` chooses which sections a response carries and any key may ask for any of them; this decides what the key may see at all, and the server refuses the rest with a `403`. `trips` is the entry ticket for every trip endpoint: without it, every call to `/api/v1/trips`, `/api/v1/trips/{id}` and a tour's GPX is a `403` with `required_scope: "trips"`, whatever else the key was given. The other areas only trim what a trip brings along. A key given `trips`, `days` and `notes` reads exactly that, however it asks.
 
 Two rules make it predictable:
 
@@ -97,7 +98,7 @@ Pick what you need with `?include=`, comma-separated:
 | Section | What it adds |
 |---|---|
 | `days` | the itinerary spine: one entry per day, with `date`, `day_number`, `title`, `notes` |
-| `places` | stops on each day, **in planned order**, with coordinates, times, duration, category and transport mode |
+| `places` | stops on each day, **in planned order**, with coordinates, times, duration, category and transport mode, and for a tour its GPX link, type and length |
 | `notes` | timed free-text notes on a day |
 | `reservations` | bookings on their starting day: type, title, location, time, status |
 | `accommodations` | where you sleep, with the date range resolved and check-in/check-out times |
@@ -140,7 +141,21 @@ curl -H "Authorization: Bearer trek_…" \
           "duration_minutes": 180,
           "category": "Museum",
           "notes": null,
-          "transport_mode": "walking"
+          "transport_mode": "walking",
+          "gpx_url": null, "tour_type": null, "distance_m": null
+        },
+        {
+          "name": "Chianti ridge walk",
+          "address": null,
+          "lat": 43.53, "lng": 11.31,
+          "time": "09:00", "end_time": null,
+          "duration_minutes": null,
+          "category": null,
+          "notes": null,
+          "transport_mode": "walking",
+          "gpx_url": "/api/v1/trips/12/tours/57/gpx",
+          "tour_type": "hike",
+          "distance_m": 12346
         }
       ],
       "day_notes": [{ "text": "Bring the tickets", "time": "09:00" }],
@@ -158,6 +173,37 @@ curl -H "Authorization: Bearer trek_…" \
   ],
   "travellers": [{ "name": "ada", "owner": true }, { "name": "bob", "owner": false }]
 }
+```
+
+#### Tours
+
+A tour (a hike, a ride, a paddle, a city walk …) is a place of the trip, so it is listed among the places like any other stop. Every place carries three more fields, all `null` for a place that is no tour:
+
+| Field | What it is |
+|---|---|
+| `gpx_url` | where to download the tour's route as GPX, for a tour that has a line of its own; `null` for a tour without one (a food tour that is only a list of stops). **Relative** (`/api/v1/trips/{id}/tours/{placeId}/gpx`), because behind a reverse proxy TREK often does not know the address it is reached at: resolve it against the base URL you called. |
+| `tour_type` | the kind of tour in TREK's own words, passed through rather than mapped: today `hike`, `bike`, `run`, `ski`, `kayak` (any paddle tour), `walk` (a city walk), `food` and `horse`. New kinds may appear; treat an unknown one as a generic tour. |
+| `distance_m` | the tour's length in whole metres, when TREK knows it |
+
+While the **Tours** addon is switched off, all three are `null` on every place and the GPX route answers `404`, as TREK's own export does.
+
+### `GET /api/v1/trips/{id}/tours/{placeId}/gpx`
+
+A tour's route as a GPX file (`Content-Type: application/gpx+xml`), byte for byte what **Export GPX** in TREK writes: the whole line with the heights it has, the activity in the track's `<type>` (`hiking`, `road_biking`, `kayaking` …), and the trip's places along it as named waypoints. Follow a place's `gpx_url` rather than building the path yourself.
+
+It needs the `trips` and the `places` scope (a tour is a place) and counts against the same rate limit as everything else here.
+
+| Status | When |
+|---|---|
+| `200` | the GPX file |
+| `400` | a malformed trip or tour id |
+| `403` | the key may not read `trips` or `places` |
+| `404` | no such trip or not one of yours (`"Trip not found"`, the same answer as the trip route), no such tour on that trip, or the Tours addon is off |
+| `422` | the tour has no route to export: `{ "error": "This tour has no route to export", "code": "tour_without_route" }` |
+
+```bash
+curl -H "Authorization: Bearer trek_…" -o ridge.gpx \
+     "https://trek.example.com/api/v1/trips/12/tours/57/gpx"
 ```
 
 ### `GET /api/v1/bucket-list`
@@ -236,7 +282,7 @@ A Homepage widget then needs no scripting:
 
 ## Notes for integrators
 
-**Join on dates, not ids.** Every day carries an ISO `date`, and accommodations carry a resolved date range rather than internal day ids. If your software keeps its own notion of a trip, the date is the one thing both sides can agree on. TREK's internal ids are not in the payload at all, by design — they would tie you to storage details that are free to change.
+**Join on dates, not ids.** Every day carries an ISO `date`, and accommodations carry a resolved date range rather than internal day ids. If your software keeps its own notion of a trip, the date is the one thing both sides can agree on. TREK's internal ids are not in the payload as fields, by design — they would tie you to storage details that are free to change. A tour's `gpx_url` carries one inside the path; treat it as a link to follow, not an id to keep.
 
 **One request, not many.** Rather than separate endpoints per section, `?include=` lets you fetch exactly what you need in a single call. Fetching a trip four times for four sections would burn your rate budget for no benefit.
 
@@ -248,10 +294,11 @@ A Homepage widget then needs no scripting:
 
 | Status | Meaning |
 |---|---|
-| `400` | malformed trip id, or an unknown `include` section |
+| `400` | malformed trip or tour id, or an unknown `include` section |
 | `401` | missing, malformed or unknown key — also what you get for a key of the wrong kind |
 | `403` | the key is valid but not allowed to read what was asked for (`code: "API_SCOPE_FORBIDDEN"`, with the missing section in `required_scope`) |
-| `404` | no such trip, or not one of yours |
+| `404` | no such trip, or not one of yours; no such tour on the trip; the Tours addon is off (GPX route) |
+| `422` | the tour has no route to export (`code: "tour_without_route"`) |
 | `429` | rate limit exceeded |
 
 **Which TREK is running.** To check the running version, for example against the latest GitHub release, call `GET /api/auth/app-config`. It needs no key and no login, and the `version` field holds the running version (such as `5.0.0`). It is not part of `/api/v1`, so it follows the app's own release rather than the promise below.

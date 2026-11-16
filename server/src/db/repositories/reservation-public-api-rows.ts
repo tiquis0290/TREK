@@ -5,6 +5,7 @@
  * re-exports the row types, so callers keep importing them from there.
  */
 import type { DB } from '../kysely/db';
+import type { PublicApiTourColumns } from './place-public-api-rows';
 
 /**
  * `public-api.service.ts::reservationsByDay` (Task 5's `// Task 2` pickup)
@@ -64,9 +65,10 @@ export type PublicApiAccommodationKyselyDB = Pick<DB, 'day_accommodations' | 'pl
  * p.category_id WHERE p.trip_id = ? AND NOT EXISTS (SELECT 1 FROM
  * day_assignments da WHERE da.place_id = p.id) AND NOT EXISTS (SELECT 1
  * FROM day_accommodations a WHERE a.place_id = p.id) ORDER BY
- * p.created_at ASC, p.id ASC`.
+ * p.created_at ASC, p.id ASC`, plus the tour columns of `LEFT JOIN tours t
+ * ON t.place_id = p.id` ({@link PublicApiTourColumns}).
  */
-export interface PublicApiUnplannedPlaceRow {
+export interface PublicApiUnplannedPlaceRow extends PublicApiTourColumns {
   name: string;
   address: string | null;
   lat: number | null;
@@ -81,5 +83,5 @@ export interface PublicApiUnplannedPlaceRow {
 
 export type PublicApiUnplannedPlaceKyselyDB = Pick<
   DB,
-  'places' | 'categories' | 'day_assignments' | 'day_accommodations'
+  'places' | 'categories' | 'day_assignments' | 'day_accommodations' | 'tours'
 >;

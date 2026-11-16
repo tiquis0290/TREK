@@ -12,7 +12,7 @@ import type { PublicApiService } from '../../../src/nest/public-api/public-api.s
 import { HttpException } from '@nestjs/common';
 import { PUBLIC_API_INCLUDES, PUBLIC_API_SCOPES, type PublicApiGrant } from '@trek/shared';
 
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { describe, it, expect, vi } from 'vitest';
 
 const TRIP = {
@@ -168,6 +168,55 @@ describe('PublicApiController', () => {
       const res = await thrownAsync(() => makeController({ getTrip }).getTrip(req(7), '12', include));
       expect(res.status).toBe(400);
       expect(getTrip).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/v1/trips/:id/tours/:placeId/gpx', () => {
+    const fakeRes = () => ({ setHeader: vi.fn(), send: vi.fn() });
+
+    it('sends the export as a GPX download, for the caller the guard resolved', async () => {
+      const getTourGpx = vi.fn().mockResolvedValue({ gpx: '<gpx/>', filename: 'Ridge.gpx' });
+      const res = fakeRes();
+      await makeController({ getTourGpx }).getTourGpx(req(7), '12', '40', res as unknown as Response);
+      expect(getTourGpx).toHaveBeenCalledWith(12, 40, 7);
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/gpx+xml; charset=utf-8');
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('Ridge.gpx'));
+      expect(res.send).toHaveBeenCalledWith('<gpx/>');
+    });
+
+    it('404s a trip the caller may not read exactly like the trip route', async () => {
+      const getTourGpx = vi.fn().mockResolvedValue(null);
+      const res = fakeRes();
+      expect(
+        await thrownAsync(() =>
+          makeController({ getTourGpx }).getTourGpx(req(7), '12', '40', res as unknown as Response),
+        ),
+      ).toEqual({ status: 404, body: { error: 'Trip not found' } });
+      expect(res.send).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a trip id', 'abc', '40', 'Invalid trip id'],
+      ['a tour id', '12', '40x', 'Invalid tour id'],
+      ['a zero tour id', '12', '0', 'Invalid tour id'],
+      ['an unsafe tour id', '12', '99999999999999999999', 'Invalid tour id'],
+    ])('400s on a malformed %s before reaching the service', async (_label, id, placeId, error) => {
+      const getTourGpx = vi.fn();
+      const ctl = makeController({ getTourGpx });
+      expect(await thrownAsync(() => ctl.getTourGpx(req(7), id, placeId, fakeRes() as unknown as Response))).toEqual({
+        status: 400,
+        body: { error },
+      });
+      expect(getTourGpx).not.toHaveBeenCalled();
+    });
+
+    it('429s once the budget is spent, sharing the one bucket of the surface', async () => {
+      const getTourGpx = vi.fn();
+      const ctl = makeController({ getTourGpx }, false);
+      expect(
+        (await thrownAsync(() => ctl.getTourGpx(req(7), '12', '40', fakeRes() as unknown as Response))).status,
+      ).toBe(429);
+      expect(getTourGpx).not.toHaveBeenCalled();
     });
   });
 

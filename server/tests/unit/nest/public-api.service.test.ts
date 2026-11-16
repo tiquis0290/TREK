@@ -256,14 +256,27 @@ describe('PublicApiService', () => {
       });
     });
 
-    it('PUBAPI-SVC-016: any other refusal of the export passes as it is', async () => {
-      const notFound = new NotFoundException('Tour not found');
-      const unprocessable = new DomainError(422, 'Something else');
+    it('PUBAPI-SVC-016: a tour the trip does not hold is a DomainError 404, never the NotFoundException the SPA fallback serves index.html for', async () => {
       const { service } = makeService({
-        exportGpx: vi.fn().mockRejectedValueOnce(notFound).mockRejectedValueOnce(unprocessable),
+        exportGpx: async () => {
+          throw new NotFoundException('Tour not found');
+        },
       });
-      await expect(service.getTourGpx(7, 41, 1)).rejects.toBe(notFound);
+      const err = await service.getTourGpx(7, 41, 1).catch((e: unknown) => e);
+      expect(err).not.toBeInstanceOf(NotFoundException);
+      expect(err).toBeInstanceOf(DomainError);
+      expect((err as DomainError).getStatus()).toBe(404);
+      expect((err as DomainError).toBody()).toEqual({ error: 'Tour not found' });
+    });
+
+    it('PUBAPI-SVC-017: any other refusal of the export passes as it is', async () => {
+      const unprocessable = new DomainError(422, 'Something else');
+      const broken = new Error('disk on fire');
+      const { service } = makeService({
+        exportGpx: vi.fn().mockRejectedValueOnce(unprocessable).mockRejectedValueOnce(broken),
+      });
       await expect(service.getTourGpx(7, 41, 1)).rejects.toBe(unprocessable);
+      await expect(service.getTourGpx(7, 41, 1)).rejects.toBe(broken);
     });
   });
 });

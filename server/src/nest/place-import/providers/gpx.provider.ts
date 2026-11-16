@@ -50,6 +50,11 @@ export interface GpxExportOptions {
 
 type Pt = { lat: number; lng: number; ele: number | null };
 
+/**
+ * A saved line (`[[lat, lng]]` or `[[lat, lng, ele]]` as JSON) as its points,
+ * leaving out every entry that is no point. The one reading of a tour's line
+ * both of its files (the GPX here, the FIT course in Tours) are written from.
+ */
 function parseGeometry(raw: string | null): Pt[] {
   if (!raw) return [];
   let parsed: unknown;
@@ -353,5 +358,14 @@ export class GpxProvider {
 
   tourFilename(tourName: string): string {
     return gpxFilename(tourName, 'tour');
+  }
+
+  /** The points of a tour's saved line, read as writeTour reads them. */
+  readTourTrack(routeGeometry: string | null): Pt[] {
+    return parseGeometry(routeGeometry);
+  }
+
+  tourFitFilename(tourName: string): string {
+    return exportFilename(tourName, 'fit', 'tour');
   }
 }

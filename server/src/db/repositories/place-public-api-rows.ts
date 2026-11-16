@@ -33,6 +33,8 @@ type PublicApiPlaceColumns = Pick<
 export interface PublicApiAssignedPlaceRow extends PublicApiPlaceColumns, PublicApiTourColumns {
   day_id: number;
   category: string | null;
+  /** MDT-02: the stage of a multi-day tour the day holds, by the key of the stop it starts at; null for the whole tour. */
+  tour_stage_key: string | null;
 }
 
 /** {@link PlacesRepository.listAssignedForPublicApi}'s `day_assignments`/`places`/`categories`/`tours` tables. */

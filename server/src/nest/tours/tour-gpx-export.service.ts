@@ -9,7 +9,16 @@ import { toRowId } from '../common/row-id';
 import { PlaceImportService } from '../place-import/place-import.service';
 import { tourFitCourse } from './tour-fit-course.helpers';
 import { encodeFitCourse } from './tour-fit.codec';
-import { gpxActivityOf } from './tour-gpx-export.helpers';
+import type { TourStageFacts } from '../public-api/tour-gpx-source.types';
+import {
+  fitSerialOf,
+  gpxActivityOf,
+  stopsOnStage,
+  tourStageCutsOf,
+  tourStageFileName,
+  tourStageName,
+  type TourStageCut,
+} from './tour-gpx-export.helpers';
 import { InjectRepository } from '@mikro-orm/nestjs';
 import { Injectable, NotFoundException } from '@nestjs/common';
 
@@ -28,20 +37,22 @@ export class TourGpxExportService {
     private readonly placeImport: PlaceImportService,
   ) {}
 
-  async export(tripId: string, placeId: string): Promise<{ gpx: string; filename: string }> {
+  async export(tripId: string, placeId: string, stageKey?: string): Promise<{ gpx: string; filename: string }> {
     const { tid, tour, place } = await this.find(tripId, placeId);
-    const stops = await this.namedStops(tid, tour.place_id);
+    const line = place.route_geometry ?? null;
+    const stage = await this.stage(tour.place_id, line, stageKey);
+    const named = await this.namedStops(tid, tour.place_id);
 
     const gpx = this.placeImport.writeTourGpx({
-      name: tour.name,
+      name: tourStageName(tour.name, stage),
       description: tour.description ?? null,
       website: tour.website ?? null,
       activity: gpxActivityOf(tour),
-      route_geometry: place.route_geometry ?? null,
-      stops,
+      route_geometry: stage ? stage.route_geometry : line,
+      stops: stage ? stopsOnStage(named, line, stage) : named,
     });
     if (!gpx) throw withoutRoute();
-    return { gpx, filename: this.placeImport.tourGpxFilename(tour.name) };
+    return { gpx, filename: this.placeImport.tourGpxFilename(tourStageFileName(tour.name, stage)) };
   }
 
   /**
@@ -49,21 +60,54 @@ export class TourGpxExportService {
    * course only as FIT: the same line read the same way, thinned to what a
    * watch holds, its named stops as course points, and the same refusals.
    */
-  async exportFit(tripId: string, placeId: string): Promise<{ fit: Buffer; filename: string }> {
+  async exportFit(tripId: string, placeId: string, stageKey?: string): Promise<{ fit: Buffer; filename: string }> {
     const { tid, tour, place } = await this.find(tripId, placeId);
+    const line = place.route_geometry ?? null;
+    const stage = await this.stage(tour.place_id, line, stageKey);
+    const named = await this.namedStops(tid, tour.place_id);
     const course = tourFitCourse({
-      name: tour.name,
+      name: tourStageName(tour.name, stage),
       activity: gpxActivityOf(tour),
-      track: this.placeImport.readTourTrack(place.route_geometry ?? null),
-      stops: await this.namedStops(tid, tour.place_id),
-      // The moving time is kept in minutes.
-      durationS: tour.duration != null ? tour.duration * 60 : null,
+      track: this.placeImport.readTourTrack(stage ? stage.route_geometry : line),
+      stops: stage ? stopsOnStage(named, line, stage) : named,
+      // The moving time is kept in minutes; a stage takes its share of it by length.
+      durationS: movingSecondsOf(tour, stage),
       createdAt: new Date(),
-      // The place id tells this tour's course from another written in the same second.
-      serial: tour.place_id,
+      // Tells this course from another written in the same second: the tour's, and each stage's own.
+      serial: fitSerialOf(tour.place_id, stage),
     });
     if (!course) throw withoutRoute();
-    return { fit: encodeFitCourse(course), filename: this.placeImport.tourFitFilename(tour.name) };
+    return { fit: encodeFitCourse(course), filename: this.placeImport.tourFitFilename(tourStageFileName(tour.name, stage)) };
+  }
+
+  /**
+   * MDT-02: the stages each multi-day tour among these places of the trip is
+   * cut into, as the public API lists them on the days that hold them. A place
+   * that is no multi-day tour, or whose line reaches none of its stages, has none.
+   */
+  async stagesOf(tripId: number, placeIds: readonly number[]): Promise<Map<number, TourStageFacts[]>> {
+    const read = async (placeId: number): Promise<[number, TourStageFacts[]]> => {
+      const [place, points] = await Promise.all([
+        this.placesRepo.findInTrip(placeId, tripId),
+        this.toursRepo.listStagePoints(placeId),
+      ]);
+      const cuts = tourStageCutsOf(points, place?.route_geometry ?? null);
+      return [placeId, cuts.map(({ key, number, count, distance_m }) => ({ key, number, count, distance_m }))];
+    };
+    const tours = await Promise.all([...new Set(placeIds)].map(read));
+    return new Map(tours.filter(([, stages]) => stages.length > 0));
+  }
+
+  /** The stage a file is cut to: none without a key, else the stage, or the 404 for one the tour does not have. */
+  private async stage(placeId: number, line: string | null, stageKey: string | undefined): Promise<TourStageCut | null> {
+    if (stageKey === undefined) return null;
+    const cut = tourStageCutsOf(await this.toursRepo.listStagePoints(placeId), line).find(
+      (stage) => stage.key === stageKey,
+    );
+    // A DomainError, not Nest's NotFoundException: in production the SPA fallback answers a GET's
+    // NotFoundException with index.html.
+    if (!cut) throw new DomainError(404, 'Tour stage not found');
+    return cut;
   }
 
   /** The tour and its place in the trip, or the 404 both files answer when either is missing. */
@@ -91,6 +135,20 @@ export class TourGpxExportService {
       return name ? [{ name, lat: point.lat, lng: point.lng }] : [];
     });
   }
+}
+
+/**
+ * The moving time of a course in seconds: the tour's (kept in minutes), and for
+ * one stage its share by length; none when the tour has no time or no length.
+ */
+function movingSecondsOf(
+  tour: { duration?: number | null; distance?: number | null },
+  stage: TourStageCut | null,
+): number | null {
+  if (tour.duration == null) return null;
+  if (!stage) return tour.duration * 60;
+  const km = tour.distance;
+  return km != null && km > 0 ? Math.round(tour.duration * 60 * Math.min(1, stage.distance_m / (km * 1000))) : null;
 }
 
 /** A tour without a line of its own is refused rather than written as a file that imports as nothing. */

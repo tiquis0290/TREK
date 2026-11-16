@@ -33,7 +33,7 @@ import { makeCategory } from '../helpers/factories/places';
 import { findRow, insertRow } from '../helpers/factories/rows';
 import { setAddonEnabled } from '../helpers/factories/settings';
 import { makeMcpToken } from '../helpers/factories/tokens';
-import { makeTour } from '../helpers/factories/tours';
+import { addTourWaypoints, makeTour } from '../helpers/factories/tours';
 import { addTripMember } from '../helpers/factories/trips';
 import { makeUser } from '../helpers/factories/users';
 import { decodeFit, fromSemicircles, messagesOf, num, referenceFitCrc } from '../helpers/fit-decoder';
@@ -89,6 +89,9 @@ const TRIPS_PLACES_TOKEN = 'trek_' + '1'.repeat(48);
 const BROKEN_SCOPES_TOKEN = 'trek_' + 'f'.repeat(48);
 
 /** A hike's line as `places.route_geometry` stores it: `[lat, lng, height]` points. */
+/** MDT-02: a two-day hut tour, five points along a meridian, its first stage ending at the hut halfway. */
+const HUT_TOUR = JSON.stringify([0, 1, 2, 3, 4].map((step) => [47.5 + step * 0.01, 11.2, 1500 + step * 100]));
+
 const RIDGE = JSON.stringify([
   [47.42, 10.98, 1210],
   [47.43, 10.99, 1380],
@@ -262,6 +265,18 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
     // Bob's own trip holds a tour Ada must not be able to fetch.
     await insertRow(orm, Places, { id: 32, trip: 2, name: 'Bobs Runde', lat: 1, lng: 2, route_geometry: RIDGE });
     await makeTour(orm, 32);
+    // MDT-02: a two-day tour on days two and three of trip 3, one stage a day.
+    await insertRow(orm, Days, { id: 31, trip: 3, day_number: 2, date: '2026-08-02' });
+    await insertRow(orm, Days, { id: 32, trip: 3, day_number: 3, date: '2026-08-03' });
+    await insertRow(orm, Places, { id: 34, trip: 3, name: 'Huettentour', lat: 47.5, lng: 11.2, route_geometry: HUT_TOUR });
+    await makeTour(orm, 34, { distance: 4.4 });
+    await addTourWaypoints(orm, 34, [
+      { lat: 47.5, lng: 11.2, station_key: 'valley' },
+      { lat: 47.52, lng: 11.2, station_key: 'hut', stage_end: 1 },
+      { lat: 47.54, lng: 11.2, station_key: 'summit' },
+    ]);
+    await insertRow(orm, DayAssignments, { day: 31, place: 34, order_index: 0, tour_stage_key: 'valley' });
+    await insertRow(orm, DayAssignments, { day: 32, place: 34, order_index: 0, tour_stage_key: 'hut' });
 
     app = await build();
     server = app.getHttpServer() as Server;
@@ -846,6 +861,78 @@ describe('Public API v1 e2e (real guard + real SQL)', () => {
       } finally {
         await setAddonEnabled(orm, 'tours', true);
       }
+    });
+  });
+
+  describe('tour stages (MDT-02)', () => {
+    const getBytes = (path: string, token?: string) =>
+      get(path, token)
+        .buffer(true)
+        .parse((res, done) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () => done(null, Buffer.concat(chunks)));
+        });
+
+    it('PUBAPI-TOUR-020: each day of a multi-day tour hands out its own stage: its link, its length, which stage', async () => {
+      const res = await get('/api/v1/trips/3?include=places', ADA_TOKEN);
+      expect(res.status).toBe(200);
+      const [whole, second, third] = res.body.days;
+      expect(second.places).toEqual([
+        expect.objectContaining({
+          name: 'Huettentour',
+          gpx_url: '/api/v1/trips/3/tours/34/gpx?stage=valley',
+          tour_type: 'hike',
+          tour_stage: { number: 1, count: 2 },
+        }),
+      ]);
+      expect(third.places[0]).toMatchObject({
+        gpx_url: '/api/v1/trips/3/tours/34/gpx?stage=hut',
+        tour_stage: { number: 2, count: 2 },
+      });
+      // Two hundredths of a degree of latitude a stage, not the 4.4 km of the whole tour.
+      expect(second.places[0].distance_m).toBeGreaterThan(2200);
+      expect(second.places[0].distance_m).toBeLessThan(2240);
+      expect(whole.places[0]).toMatchObject({ name: 'Gratweg', tour_stage: null });
+    });
+
+    it('PUBAPI-TOUR-021: a stage link serves that stage alone, as GPX and as FIT beside it', async () => {
+      const gpx = await getBytes('/api/v1/trips/3/tours/34/gpx?stage=hut', ADA_TOKEN);
+      expect(gpx.status).toBe(200);
+      expect(gpx.headers['content-disposition']).toMatch(/Huettentour.2-2\.gpx/);
+      const text = (gpx.body as Buffer).toString('utf8');
+      expect(text).toContain('2/2 Huettentour');
+      expect(text.match(/<trkpt /g)).toHaveLength(3);
+      expect(text).toContain('lat="47.52"');
+      expect(text).not.toContain('lat="47.51"');
+
+      const fit = await getBytes('/api/v1/trips/3/tours/34/fit?stage=valley', ADA_TOKEN);
+      expect(fit.status).toBe(200);
+      const file = fit.body as Buffer;
+      expect(referenceFitCrc(file)).toBe(0);
+      const decoded = decodeFit(file);
+      expect(messagesOf(decoded, 31)[0].fields.get(5)).toBe('1/2 Huettentour');
+      const lats = messagesOf(decoded, 20).map((r) => Number(fromSemicircles(num(r, 0)).toFixed(6)));
+      expect(lats).toEqual([47.5, 47.51, 47.52]);
+      // Its own serial, so a watch keeps both stages rather than taking them for one file.
+      const whole = decodeFit((await getBytes('/api/v1/trips/3/tours/34/fit', ADA_TOKEN)).body as Buffer);
+      expect(num(decoded.messages[0], 3)).not.toBe(num(whole.messages[0], 3));
+    });
+
+    it('PUBAPI-TOUR-022: a stage the tour does not have is a 404 in the TREK envelope, an empty one a 400', async () => {
+      const [unknown, lastStop, dayTour, empty] = await getEach(
+        ['/api/v1/trips/3/tours/34/fit?stage=nowhere', ADA_TOKEN],
+        ['/api/v1/trips/3/tours/34/gpx?stage=summit', ADA_TOKEN],
+        ['/api/v1/trips/3/tours/30/fit?stage=valley', ADA_TOKEN],
+        ['/api/v1/trips/3/tours/34/fit?stage=', ADA_TOKEN],
+      );
+      for (const res of [unknown, lastStop, dayTour]) {
+        expect(res.status).toBe(404);
+        expect(JSON.parse(Buffer.isBuffer(res.body) ? res.body.toString('utf8') : JSON.stringify(res.body))).toEqual({
+          error: 'Tour stage not found',
+        });
+      }
+      expect(empty.status).toBe(400);
     });
   });
 });

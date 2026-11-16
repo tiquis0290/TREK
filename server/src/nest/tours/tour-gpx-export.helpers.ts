@@ -1,4 +1,13 @@
-import type { BikeProfile, PaddleBoatType, RunProfile, SkiDiscipline } from '@trek/shared';
+import {
+  haversineMetres,
+  tourStageStopsOf,
+  tourStageStretchesOf,
+  vertexIndicesOf,
+  type BikeProfile,
+  type PaddleBoatType,
+  type RunProfile,
+  type SkiDiscipline,
+} from '@trek/shared';
 
 /** What GPX calls the activity in a track's <type>; a paddle tour says what it is paddled in. */
 const PADDLE_ACTIVITY: Record<PaddleBoatType, string> = {
@@ -59,4 +68,103 @@ export function gpxActivityOf(tour: {
   if (type === 'ski') return SKI_ACTIVITY[tour.ski_discipline as SkiDiscipline] ?? 'skiing';
   if (type === 'horse') return HORSE_ACTIVITY;
   return type === 'hike' ? 'hiking' : type;
+}
+
+/** MDT-02: one stage of a multi-day tour as its files cut it. */
+export interface TourStageCut {
+  /** The key of the stop the stage starts at, which a day holding it names. */
+  key: string;
+  /** Which stage it is, from 1, of `count`. */
+  number: number;
+  count: number;
+  /** The vertices of the saved line it runs between. */
+  from: number;
+  to: number;
+  /** Its stretch of the saved line, as JSON like the line itself. */
+  route_geometry: string;
+  /** Its length in whole metres. */
+  distance_m: number;
+}
+
+/** A saved line as the points it holds (`[lat, lng, ele?]`), leaving out any entry that is no point. */
+function savedLineOf(raw: string | null): number[][] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
+    (entry): entry is number[] =>
+      Array.isArray(entry) && entry.length >= 2 && Number.isFinite(entry[0]) && Number.isFinite(entry[1]),
+  );
+}
+
+function lengthOf(line: readonly number[][]): number {
+  let metres = 0;
+  for (let i = 1; i < line.length; i++) metres += haversineMetres(line[i - 1][0], line[i - 1][1], line[i][0], line[i][1]);
+  return metres;
+}
+
+/**
+ * MDT-02: the stages of a multi-day tour as its files cut them, each the
+ * stretch of the saved line from the stop it starts at to the stop the next one
+ * starts at, the stretch the map draws for the day. None for a day tour; a
+ * stage the line does not reach yet is left out.
+ */
+export function tourStageCutsOf(
+  points: Parameters<typeof tourStageStopsOf>[0],
+  routeGeometry: string | null,
+): TourStageCut[] {
+  const stops = tourStageStopsOf(points);
+  const line = savedLineOf(routeGeometry);
+  return tourStageStretchesOf(stops, line).flatMap((stretch) => {
+    if (!stretch) return [];
+    const part = line.slice(stretch.from, stretch.to + 1);
+    return [
+      {
+        key: stops[stretch.index].key,
+        number: stretch.index + 1,
+        count: stops.length - 1,
+        from: stretch.from,
+        to: stretch.to,
+        route_geometry: JSON.stringify(part),
+        distance_m: Math.round(lengthOf(part)),
+      },
+    ];
+  });
+}
+
+/** The named stops of a tour that lie on one stage's stretch of its line, in their order. */
+export function stopsOnStage<T extends { lat: number; lng: number }>(
+  stops: readonly T[],
+  routeGeometry: string | null,
+  stage: Pick<TourStageCut, 'from' | 'to'>,
+): T[] {
+  const at = vertexIndicesOf(stops, savedLineOf(routeGeometry));
+  return stops.filter((_, index) => at[index] >= stage.from && at[index] <= stage.to);
+}
+
+/** A stage's name: its number first, so a watch that cuts a course's name short still tells the stages apart. */
+export function tourStageName(tourName: string, stage: Pick<TourStageCut, 'number' | 'count'> | null): string {
+  return stage ? `${stage.number}/${stage.count} ${tourName}` : tourName;
+}
+
+/** A stage's file name: the tour and the stage, so the stages of one tour download side by side. */
+export function tourStageFileName(tourName: string, stage: Pick<TourStageCut, 'number' | 'count'> | null): string {
+  return stage ? `${tourName} ${stage.number}-${stage.count}` : tourName;
+}
+
+/**
+ * MDT-02: the serial number of a tour's FIT course. The whole tour keeps its
+ * place id; each stage has one of its own, with the top bit set so it never
+ * meets another tour's place id: a watch knows a course by its file_id, so two
+ * stages fetched within one second would otherwise be one file to it, the
+ * later replacing the earlier. Never 0.
+ */
+export function fitSerialOf(placeId: number, stage: Pick<TourStageCut, 'number'> | null): number {
+  if (!stage) return placeId;
+  return (0x80000000 + ((placeId * 64 + stage.number) % 0x7fffffff)) >>> 0;
 }

@@ -373,7 +373,7 @@ describe('PublicApiController — what a narrowed key reaches', () => {
     const getTourGpx = vi.fn().mockResolvedValue({ gpx: '<gpx/>', filename: 'Ridge.gpx' });
     const res = { setHeader: vi.fn(), send: vi.fn() } as unknown as Response;
     await apiController({ getTourGpx }).getTourGpx(req(limited('trips', 'places')), '12', '40', res);
-    expect(getTourGpx).toHaveBeenCalledWith(12, 40, 7);
+    expect(getTourGpx).toHaveBeenCalledWith(12, 40, 7, undefined);
   });
 
   it('PUBAPI-SCOPE-U062: a tour FIT needs `trips` and `places`, as the GPX does', async () => {
@@ -385,7 +385,7 @@ describe('PublicApiController — what a narrowed key reaches', () => {
     expect(refused.body).toMatchObject({ code: 'API_SCOPE_FORBIDDEN', required_scope: 'places' });
     expect(getTourFit).not.toHaveBeenCalled();
     await ctl.getTourFit(req(limited('trips', 'places')), '12', '40', res);
-    expect(getTourFit).toHaveBeenCalledWith(12, 40, 7);
+    expect(getTourFit).toHaveBeenCalledWith(12, 40, 7, undefined);
   });
 });
 

@@ -17,6 +17,7 @@ const PLAIN_PLACE = {
   gpx_url: null,
   tour_type: null,
   distance_m: null,
+  tour_stage: null,
 };
 
 describe('publicApiPlaceSchema', () => {

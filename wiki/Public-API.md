@@ -183,9 +183,21 @@ A tour (a hike, a ride, a paddle, a city walk …) is a place of the trip, so it
 |---|---|
 | `gpx_url` | where to download the tour's route as GPX, for a tour that has a line of its own; `null` for a tour without one (a food tour that is only a list of stops). **Relative** (`/api/v1/trips/{id}/tours/{placeId}/gpx`), because behind a reverse proxy TREK often does not know the address it is reached at: resolve it against the base URL you called. |
 | `tour_type` | the kind of tour in TREK's own words, passed through rather than mapped: today `hike`, `bike`, `run`, `ski`, `kayak` (any paddle tour), `walk` (a city walk), `food` and `horse`. New kinds may appear; treat an unknown one as a generic tour. |
-| `distance_m` | the tour's length in whole metres, when TREK knows it |
+| `distance_m` | the tour's length in whole metres, when TREK knows it; on a day that holds one stage of a multi-day tour, that stage's length |
+| `tour_stage` | which stage of a multi-day tour the day holds, `{ "number": 2, "count": 3 }`; `null` for a place that is no tour, a day tour, a day that holds the whole tour, and every unplanned place |
 
-While the **Tours** addon is switched off, all three are `null` on every place and the GPX and FIT routes answer `404`, as TREK's own export does.
+While the **Tours** addon is switched off, all of these are `null` on every place and the GPX and FIT routes answer `404`, as TREK's own export does.
+
+##### Multi-day tours
+
+A multi-day tour is one route split into stages, one a day. A day that holds one stage hands out that stage: its `gpx_url` carries `?stage=` (the key of the stop the stage starts at), `distance_m` is the stage's length and `tour_stage` says which stage it is. Both file routes take the same query and serve that stage's stretch of the route alone, cut where TREK's map draws the day's stage, with the trip's places along that stretch, named with the stage first (`2/3 Hut to hut`) so a device that shortens a course's name still tells the stages apart. Each stage's FIT course has a serial number of its own, so a watch keeps every stage rather than taking two for one file.
+
+```bash
+curl -H "Authorization: Bearer trek_…" -o hut-2.fit \
+     "https://trek.example.com/api/v1/trips/12/tours/57/fit?stage=hut"
+```
+
+A stage the tour does not have (or no longer has) is a `404` with `{ "error": "Tour stage not found" }`; an empty or repeated `stage` is a `400`. A stage the route does not reach yet leaves its day with the whole tour.
 
 ### `GET /api/v1/trips/{id}/tours/{placeId}/gpx`
 

@@ -123,6 +123,10 @@ export class PublicApiController {
    * line 422 with `code: tour_without_route`, and the route is a 404 while the
    * Tours addon is off, as the app's own export is.
    *
+   * A day's `gpx_url` for one stage of a multi-day tour carries `?stage=`
+   * (MDT-02): the file is then that stage's stretch alone, and a stage the tour
+   * does not have is a 404.
+   *
    * response-contract-exempt: a file download written through @Res(), not a JSON body.
    */
   @Get('trips/:id/tours/:placeId/gpx')
@@ -131,9 +135,10 @@ export class PublicApiController {
     @Param('id') id: string,
     @Param('placeId') placeId: string,
     @Res() res: Response,
+    @Query('stage') stage?: unknown,
   ): Promise<void> {
     const { tripId, tourId, userId } = await this.tourFileRequest(req, id, placeId);
-    const file = await this.api.getTourGpx(tripId, tourId, userId);
+    const file = await this.api.getTourGpx(tripId, tourId, userId, parseStageKey(stage));
     sendTourFile(res, file && { body: file.gpx, filename: file.filename }, 'application/gpx+xml; charset=utf-8');
   }
 
@@ -152,9 +157,10 @@ export class PublicApiController {
     @Param('id') id: string,
     @Param('placeId') placeId: string,
     @Res() res: Response,
+    @Query('stage') stage?: unknown,
   ): Promise<void> {
     const { tripId, tourId, userId } = await this.tourFileRequest(req, id, placeId);
-    const file = await this.api.getTourFit(tripId, tourId, userId);
+    const file = await this.api.getTourFit(tripId, tourId, userId, parseStageKey(stage));
     sendTourFile(res, file && { body: file.fit, filename: file.filename }, 'application/vnd.ant.fit');
   }
 
@@ -191,6 +197,19 @@ function sendTourFile(res: Response, file: { body: string | Buffer; filename: st
  */
 function parseTripId(raw: string): number {
   return parsePositiveId(raw, 'Invalid trip id');
+}
+
+/**
+ * MDT-02: `?stage=` on a tour file route, the key of the stop a stage starts
+ * at; absent for the whole tour. Given more than once, or empty, it is a 400
+ * rather than a guess at which stage was meant.
+ */
+function parseStageKey(raw: unknown): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string' || raw === '' || raw.length > 200) {
+    throw new HttpException({ error: 'Invalid tour stage' }, 400);
+  }
+  return raw;
 }
 
 /** A positive integer path segment, or a 400 with `error` as its message. */
